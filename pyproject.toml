@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools", "ChimeraX-BundleBuilder"]
+build-backend = "chimerax.bundle_builder.cx_pep517"
+
+[project]
+# ChimeraX bundle names must start with "ChimeraX-"
+# to avoid clashes with package names in pypi.python.org.
+# When uploaded to the ChimeraX toolshed, the bundle
+# will be displayed without the ChimeraX- prefix.
+# To override this name, see the [chimerax] section
+# below.
+name = "ChimeraX-QScore"
+# version = "1.0"
+license = { text = "MIT" }
+authors= [{name = "Tristan Croll", email="tcroll@altoslabs.com"}]
+description = "Q-Score for validation of local model-map fit"
+dependencies = [
+	"ChimeraX-Core >=0.1"
+]
+dynamic = ["classifiers", "requires-python", "version"]
+
+[project.readme]
+content-type = "text"
+text="""ChimeraX implementation of the map-model Q-score, as described in Pintille et al. (2020): https://www.nature.com/articles/s41592-020-0731-1.
+
+Calculates a per-atom estimate of "resolvability" based on the comparison between local map values around 
+each atom and an ideal high-resolution Gaussian. A low Q-score typically means that either the local 
+resolution is poor, or that the atom is poorly fitted to the map.
+
+Implements qscore command and a GUI interface.
+"""
+	
+[project.urls]
+Home = "https://github.com/tristanic/chimerax-qscore"
+
+# To use a dynamic version, add "version" to the project.dynamic
+# list, then remove project.version
+[tool.setuptools.dynamic]
+version = { attr = "src.__version__" }
+
+[chimerax]
+# Set this value to a string to give your module name a
+# different installed name than the project name. For
+# example, ChimeraX-AlignmentHdrs uses this option to
+# name its package "alignment_headers"
+module-name-override = "qscore"
+min-session-version = 1
+max-session-version = 1
+categories = ["General"]
+classifiers = ["Development Status :: 2 - Pre-Alpha"]
+
+[chimerax.command.qscore]
+category = "Validation"
+description = "Model-map Q-Score"
+
+[chimerax.tool."Model-map Q-Score"]
+category = "Validation"
+description = "Local assessment of model-map fit"
