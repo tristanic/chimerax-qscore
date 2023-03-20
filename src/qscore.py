@@ -26,6 +26,8 @@ def q_score(residues, volume, ref_sigma=0.6, points_per_shell = 8, max_rad = 2.0
         raise UserError('All residues must be from the same model!')
     m = residues.unique_structures[0]
     session = residues.unique_structures[0].session
+    from .clipper_compat import ensure_clipper_map_covers_selection
+    ensure_clipper_map_covers_selection(session, m, residues, volume)
     from ._kmeans import spherical_k_means
     matrix, xform = volume.matrix_and_transform(None, 'all', (1,1,1))
     from chimerax.map_data import interpolate_volume_data
