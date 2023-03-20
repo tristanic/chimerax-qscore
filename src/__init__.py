@@ -29,6 +29,12 @@ class _MyAPI(BundleAPI):
         if desc.synopsis is None:
             desc.synopsis = ci.synopsis
         register(ci.name, desc, cmd.qscore)
+    
+    @staticmethod
+    def start_tool(session, bundle_info, tool_info):
+        from chimerax.core import tools
+        from .tool import QScore_ToolUI
+        return tools.get_singleton(session, QScore_ToolUI, tool_info.name, create=True)
 
 
 bundle_api = _MyAPI()
