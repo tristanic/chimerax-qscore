@@ -25,14 +25,6 @@ __pycache__/
 .vs/
 .vscode/
 
-# Precompiled MKL libraries
-!libfftw2xc.so
-!libfftw_mkl_core.so
-!libfftw2xc.dylib
-!mkl_custom.dylib
-!mkl_fftw2.dll
-!lib/fftw2xc_win
-
 # Distribution / packaging
 src/include/
 src/docs/
