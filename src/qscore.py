@@ -24,6 +24,7 @@ def q_score(residues, volume, ref_sigma=0.6, points_per_shell = 8, max_rad = 2.0
     if len(residues.unique_structures) != 1:
         from chimerax.core.errors import UserError
         raise UserError('All residues must be from the same model!')
+    m = residues.unique_structures[0]
     session = residues.unique_structures[0].session
     from ._kmeans import spherical_k_means
     matrix, xform = volume.matrix_and_transform(None, 'all', (1,1,1))
@@ -63,7 +64,17 @@ def q_score(residues, volume, ref_sigma=0.6, points_per_shell = 8, max_rad = 2.0
     all_coords = all_atoms.scene_coords
     query_coords = query_atoms.scene_coords
 
-    r0_vals = volume.interpolated_values(query_coords)
+    r0_vals, oob = volume.interpolated_values(query_coords, out_of_bounds_list=True)
+    if len(oob):
+        oob_residues = query_atoms[oob].unique_residues
+        from chimerax.atomic import concise_residue_spec
+        session.logger.warning(f'WARNING: the following residues in #{m.id_string} have atoms outside the bounds of volume #{volume.id_string} '
+                            f'and will be excluded from the Q-score calculation:\n{concise_residue_spec(session, oob_residues)}')
+        mask = numpy.logical_not(numpy.in1d(query_atoms.residues, oob_residues))
+        residues = residues[numpy.logical_not(numpy.in1d(residues, oob_residues))]
+        query_atoms = query_atoms[mask]
+        query_coords = query_atoms.scene_coords
+        r0_vals = r0_vals[mask]
     
     num_shells = int(floor(max_rad/step))
 
