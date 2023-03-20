@@ -25,7 +25,7 @@ def q_score(residues, volume, ref_sigma=0.6, points_per_shell = 8, max_rad = 2.0
         from chimerax.core.errors import UserError
         raise UserError('All residues must be from the same model!')
     session = residues.unique_structures[0].session
-    from .._kmeans import spherical_k_means
+    from ._kmeans import spherical_k_means
     matrix, xform = volume.matrix_and_transform(None, 'all', (1,1,1))
     from chimerax.map_data import interpolate_volume_data
     min_d, max_d = min_max_d(volume)

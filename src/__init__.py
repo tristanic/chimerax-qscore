@@ -25,10 +25,10 @@ class _MyAPI(BundleAPI):
         # module.
         from . import cmd
         from chimerax.core.commands import register
-        desc = cmd.basic_desc
+        desc = cmd.qscore_desc
         if desc.synopsis is None:
             desc.synopsis = ci.synopsis
-        register(ci.name, desc, cmd.basic)
+        register(ci.name, desc, cmd.qscore)
 
 
 bundle_api = _MyAPI()

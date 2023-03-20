@@ -56,3 +56,11 @@ description = "Model-map Q-Score"
 [chimerax.tool."Model-map Q-Score"]
 category = "Validation"
 description = "Local assessment of model-map fit"
+
+[chimerax.extension._kmeans]
+sources = [
+	"src/_kmeans_cpp/spherical_k_means.cpp"
+]
+include-dirs = [
+	"extern/pybind11/include"
+]

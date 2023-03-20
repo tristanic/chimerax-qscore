@@ -11,6 +11,16 @@ typedef std::array<double, 3> vec3;
 vec3 operator-(const vec3& first, const vec3& second) { return vec3{first[0]-second[0], first[1]-second[1], first[2]-second[2]};} 
 
 
+template <typename T>
+inline T dot_product_3D(T a[3], T b[3])
+{
+    T accum = 0;
+    for (int i=0; i < 3; ++i) {
+        accum += (*a++)*(*b++);
+    }
+    return accum;
+}
+
 double cosine_similarity(vec3& p1, vec3& p2) {
     return dot_product_3D(p1.data(), p2.data());
 }

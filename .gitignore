@@ -1,0 +1,81 @@
+pyuic
+setpaths.sh
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+
+# automake stuff
+*.Plo
+
+# Apple cruft
+.DS_Store
+
+# C extensions
+*.dylib
+*.dll
+*.obj
+*.exp
+*.lib
+*.o
+*.o.d
+*.so
+*.so.*
+
+#VS Code
+.vs/
+.vscode/
+
+# Precompiled MKL libraries
+!libfftw2xc.so
+!libfftw_mkl_core.so
+!libfftw2xc.dylib
+!mkl_custom.dylib
+!mkl_fftw2.dll
+!lib/fftw2xc_win
+
+# Distribution / packaging
+src/include/
+src/docs/
+bin/
+build/
+develop-eggs/
+dist/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+.tox/
+.coverage
+.cache
+nosetests.xml
+coverage.xml
+
+# Translations
+*.mo
+
+# Mr Developer
+.mr.developer.cfg
+.project
+.pydevproject
+
+# Rope
+.ropeproject
+
+# Django stuff:
+*.log
+*.pot
+
+# Sphinx documentation
+docs/_build/
