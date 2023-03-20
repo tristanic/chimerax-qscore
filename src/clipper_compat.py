@@ -21,4 +21,4 @@ def ensure_clipper_map_covers_selection(session, m, residues, v):
     if map_associated_with_model(m, v):
         from chimerax.core.commands import run
         from chimerax.atomic import concise_residue_spec
-        run(session, f'clipper isolate #{m.id_string}{concise_residue_spec(session, residues)}')
+        run(session, f'clipper isolate {concise_residue_spec(session, residues)}')
