@@ -8,7 +8,6 @@ from Qt.QtWidgets import (
 )
 from Qt import QtCore
 
-from matplotlib import pyplot as plt
 
 class DefaultVLayout(QVBoxLayout):
     def __init__(self, *args, **kwargs):
@@ -27,10 +26,12 @@ class QScoreWindow(MainToolWindow):
         super().__init__(tool_instance, **kw)
         self._registered_widgets = []
         parent = self.ui_area
+        parent.setStyleSheet('')
         main_layout = DefaultVLayout()
         parent.setLayout(main_layout)
         self.main_widget = QScoreWidget(self.session, self)
         main_layout.addWidget(self.main_widget)
+        self.manage(placement='side')
     
     def cleanup(self):
         while len(self._registered_widgets):
@@ -41,8 +42,7 @@ class QScoreWindow(MainToolWindow):
         self._registered_widgets.append(w)
 
 
-
-class QScoreWidget(QWidget):
+class QScoreWidget(QFrame):
     def __init__(self, session, main_window, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.session = session
@@ -61,10 +61,21 @@ class QScoreWidget(QWidget):
 
         layout = self.main_layout = DefaultVLayout()
         self.setLayout(layout)
+        bf = self.top_button_frame = QFrame()
+        layout.addWidget(bf)
+        bl = DefaultHLayout()
+        bf.setLayout(bl)
+        bl.addWidget(QLabel('Atomic model: '))
         asb = AtomicStructureMenuButton(session, self)
-        layout.addWidget(asb)
+        bl.addWidget(asb)
+        bl.addStretch()
+        bl.addWidget(QLabel('Map: '))
         vb = VolumeMenuButton(session, self)
-        layout.addWidget(vb)
+        bl.addWidget(vb)
+
+        pw = self.plot_widget = QScorePlot()
+        layout.addWidget(pw)
+
 
     def _models_removed_cb(self, trigger_name, removed):
         if self.selected_model in removed:
@@ -96,11 +107,92 @@ class QScoreWidget(QWidget):
             h = self._handlers.pop()
             h.remove()
 
+class QScorePlot(QFrame):
+    MIN_ZOOM = 25
+    ZOOM_SCALE = 1.1
+    MAX_ZOOM_STEPS_PER_FRAME=5
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from matplotlib.figure import Figure
+        from matplotlib.backends.backend_qtagg import (
+            FigureCanvasQTAgg as FigureCanvas,
+            )
+        from matplotlib.widgets import Slider
+
+        self._slider_blocked = False
+        ml = self.main_layout = DefaultVLayout()
+        self.setLayout(ml)
+
+        fig = self.plot = Figure()
+        axes = self.axes = fig.add_subplot(111)
+        axes.autoscale(enable=False)
+        axes.set_ylim(-1,1)
+        axes.set_xlim(0, self.MIN_ZOOM)
+        fig.subplots_adjust(bottom=0.25)
+
+        sax = fig.add_axes([0.2, 0.1, 0.65, 0.03])
+        hpos = Slider(sax, '', 0, 1, valinit=0)
+
+        # TEST DATA
+        import numpy as np
+        resnum = np.arange(0.0, 100.0, 0.1)
+        qscore = np.sin(2*np.pi*resnum)
+        l, = axes.plot(resnum,qscore)
+        # /TEST DATA
+
+        canvas = self.canvas = FigureCanvas(fig)
+
+        def slider_update(val):
+            if self._slider_blocked:
+                return
+            pos = hpos.val
+            xmin, xmax = axes.get_xlim()
+            xrange = xmax-xmin
+            new_xmin = pos * (resnum.max()-xrange-resnum.min())
+
+            axes.axis([new_xmin,new_xmin+xrange,-1,1])
+            canvas.draw_idle()
+        
+        def zoom(event):
+            xmin, xmax = axes.get_xlim()
+            xpoint = event.xdata
+            xrange = xmax-xmin
+            if event.button == 'up':
+                if xrange <= self.MIN_ZOOM:
+                    return
+                xrange = int(xrange/(self.ZOOM_SCALE*min(event.step, self.MAX_ZOOM_STEPS_PER_FRAME)))
+            else:
+                if xrange >= resnum.max()-resnum.min():
+                    return
+                xrange = int(xrange*self.ZOOM_SCALE*-min(event.step, self.MAX_ZOOM_STEPS_PER_FRAME))
+            new_xmin = min(resnum.max()-xrange, max(min(resnum), int(xpoint-xrange/2)))
+            new_xmax = min(max(resnum), new_xmin+xrange)
+            axes.set_xlim([new_xmin, new_xmax])
+            self._slider_blocked = True
+            if xrange >= resnum.max()-resnum.min():
+                hpos.set_active(False)
+                hpos.set_val(0)
+            else:
+                hpos.set_active(True)
+                hpos.set_val((new_xmin-resnum.min())/((resnum.max()-xrange)-resnum.min()))
+            self._slider_blocked = False
+        
+        canvas.mpl_connect('scroll_event', zoom)
+
+                
+
+
+        hpos.on_changed(slider_update)
+
+        ml.addWidget(canvas)
+        canvas.draw()
+
 
 class ModelMenuButtonBase(QPushButton):
-    def __init__(self, session, parent,  *args, model_type=None, trigger_name=None, tooltip='', **kwargs):
-        super().__init__(parent, *args, **kwargs)
+    def __init__(self, session, owner,  *args, model_type=None, trigger_name=None, tooltip='', **kwargs):
+        super().__init__(*args, **kwargs)
         self.session = session
+        self.owner = owner
         self._selected_model = None
         if model_type is None:
             raise RuntimeError('Model type must be specified!')
@@ -112,7 +204,7 @@ class ModelMenuButtonBase(QPushButton):
         self.setToolTip(tooltip)
         self._set_button_text(None)
         if trigger_name is not None:
-            parent.triggers.add_handler(trigger_name, self._model_changed_cb)
+            owner.triggers.add_handler(trigger_name, self._model_changed_cb)
     
     def _find_available_models(self):
         models = self.session.models.list(type=self.model_type)
@@ -134,16 +226,16 @@ class ModelMenuButtonBase(QPushButton):
             self.setText(f'#{model.id_string}')
 
 class AtomicStructureMenuButton(ModelMenuButtonBase):
-    def __init__(self, session, parent, *args, **kwargs):
+    def __init__(self, session, owner, *args, **kwargs):
         from chimerax.atomic import AtomicStructure
-        super().__init__(session, parent, *args, 
+        super().__init__(session, owner, *args, 
                         model_type=AtomicStructure,
                         trigger_name='selected model changed', 
                         tooltip='Atomic model to use for Q-score calculation.',
                         **kwargs)
         
     def _menu_entry_clicked(self, model=None):
-        self.parent().selected_model = model
+        self.owner.selected_model = model
 
     def _populate_available_models_menu(self):
         mmm = self.master_model_menu
@@ -157,9 +249,9 @@ class AtomicStructureMenuButton(ModelMenuButtonBase):
 
 
 class VolumeMenuButton(ModelMenuButtonBase):
-    def __init__(self, session, parent, *args, **kwargs):
+    def __init__(self, session, owner, *args, **kwargs):
         from chimerax.map import Volume
-        super().__init__(session, parent, *args, 
+        super().__init__(session, owner, *args, 
                          model_type=Volume,
                          trigger_name='selected volume changed',
                          tooltip='Volume to use for Q-score calculation.',
@@ -168,7 +260,7 @@ class VolumeMenuButton(ModelMenuButtonBase):
     def _find_available_models(self):
         volumes = super()._find_available_models()
         from .clipper_compat import model_managed_by_clipper, map_associated_with_model
-        m = self.parent().selected_model
+        m = self.owner.selected_model
         if m is not None and model_managed_by_clipper(m):
             from chimerax.clipper.maps import XmapHandler_Live, XmapHandler_Static, NXmapHandler
             assoc = []
@@ -185,7 +277,7 @@ class VolumeMenuButton(ModelMenuButtonBase):
         return ([], volumes, [])
     
     def _menu_entry_clicked(self, model=None):
-        self.parent().selected_volume=model
+        self.owner.selected_volume=model
 
     def _populate_available_models_menu(self):
         mmm = self.master_model_menu
@@ -197,7 +289,7 @@ class VolumeMenuButton(ModelMenuButtonBase):
             def _cb(_, volume=v):
                 self._menu_entry_clicked(volume)
             a.triggered.connect(_cb)
-        if model_managed_by_clipper(self.parent().selected_model):
+        if model_managed_by_clipper(self.owner.selected_model):
             if len(assoc):
                 a = mmm.addAction('--- Associated maps ---')
                 a.setToolTip('<span>Maps that have been assigned to the selected model by Clipper</span>')
