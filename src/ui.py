@@ -190,6 +190,9 @@ class QScorePlot(QFrame):
         resnum = self.residue_numbers = numpy.zeros(2, dtype=numpy.int32)-1
         qscore = self.qscores = numpy.array([0,1], dtype=numpy.float32)
         def _picker(scatter, mouse_event, x_radius=1):
+            from matplotlib.backend_bases import MouseButton
+            if mouse_event.button != MouseButton.LEFT:
+                return False, dict()
             import numpy
             if mouse_event.inaxes != self.axes:
                 return False, dict()
