@@ -184,6 +184,7 @@ class QScorePlot(QFrame):
 
         sax = fig.add_axes([0.2, 0.1, 0.65, 0.03])
         hpos = self._hpos_slider = Slider(sax, '', 0, 1, valinit=0)
+        hpos.valtext.set_visible(False)
 
         self.residues = []
         resnum = self.residue_numbers = numpy.zeros(2, dtype=numpy.int32)-1
