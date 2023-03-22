@@ -17,7 +17,7 @@ _numpy_print_options = {
     }
 
 
-def q_score(residues, volume, ref_sigma=0.6, points_per_shell = 8, max_rad = 2.0, step=0.1, num_test_points=128, clustering_iterations=5, include_h = False, debug = False, draw_points=False):
+def q_score(residues, volume, ref_sigma=0.6, points_per_shell = 8, max_rad = 2.0, step=0.1, num_test_points=128, clustering_iterations=5, include_h = False, debug = False, draw_points=False, logger=None, log_interval=1000):
     from chimerax.geometry import find_close_points, find_closest_points, Places
     import numpy
     from math import floor
@@ -80,11 +80,20 @@ def q_score(residues, volume, ref_sigma=0.6, points_per_shell = 8, max_rad = 2.0
     
     num_shells = int(floor(max_rad/step))
 
+    if logger is not None:
+        from time import time
+        start_time = time()
+
 
     q_scores = []
     for i,a in enumerate(query_atoms):
         if draw_points:
             color = base_colors[i]
+        if logger is not None and i!= 0 and i%log_interval==0:
+            current_time = time()
+            elapsed = current_time - start_time
+            estimated_total = len(query_atoms)/i * elapsed
+            logger.status(f'Estimated time remaining: {estimated_total-elapsed:.1f} seconds')
         a_coord = a.scene_coord
         _, nearby_i = find_close_points([a_coord], all_coords, max_rad*3)
         nearby_a = all_atoms[nearby_i]
@@ -169,7 +178,8 @@ def q_score(residues, volume, ref_sigma=0.6, points_per_shell = 8, max_rad = 2.0
             rscores = q_scores[indices]
             residue_scores[r] = (rscores.mean(), rscores.min())
 
-
+    if logger is not None:
+        logger.status('')
     return residue_scores, q_scores
 
 

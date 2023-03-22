@@ -17,7 +17,7 @@ def qscore(session, residues, to_volume=None, reference_gaussian_sigma=0.6, poin
                                        points_per_shell=points_per_shell,
                                        max_rad=max_shell_radius, 
                                        step=shell_radius_step,
-                                       include_h=include_hydrogens)
+                                       include_h=include_hydrogens, logger=session.logger)
     session.logger.info(f'Overall mean Q-Score: {atom_scores.mean():.2f}')
     return residue_map, atom_scores
 
