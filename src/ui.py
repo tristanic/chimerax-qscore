@@ -45,6 +45,7 @@ class QScoreWindow(MainToolWindow):
 class QScoreWidget(QFrame):
     def __init__(self, session, main_window, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        session.qscorewidget = self # DEBUG
         self.session = session
         main_window.register_widget(self)
         from chimerax.core.triggerset import TriggerSet
@@ -58,6 +59,9 @@ class QScoreWidget(QFrame):
 
         self._selected_model = None
         self._selected_volume = None
+
+        self._residue_map = None
+        self._atom_scores = None
 
         layout = self.main_layout = DefaultVLayout()
         self.setLayout(layout)
@@ -76,13 +80,35 @@ class QScoreWidget(QFrame):
         pw = self.plot_widget = QScorePlot()
         layout.addWidget(pw)
 
+        rbl = DefaultHLayout()
+        rb = self.recalc_button = QPushButton('Recalculate')
+        rbl.addWidget(rb)
+        rbl.addStretch()
+        rbl.addWidget(QLabel('Chain: '))
+        cb = self.chain_button = ChainChooserButton()
+        self.triggers.add_handler('selected model changed', cb._selected_model_changed_cb)
+        cb.triggers.add_handler('selected chain changed', self.update_plot)
+        rbl.addWidget(cb)
+
+        def _recalc(*_):
+            m, v = self.selected_model, self.selected_volume
+            if m is None or v is None:
+                from chimerax.core.errors import UserError
+                raise UserError('Must select a model and map first!')
+            from chimerax.core.commands import run
+            residue_map, atom_scores = run(session, f'qscore #{m.id_string} to #{v.id_string}')
+            self._residue_map = residue_map
+            self._atom_scores = atom_scores
+            self.update_plot()
+        rb.clicked.connect(_recalc)
+        layout.addLayout(rbl)
+
 
     def _models_removed_cb(self, trigger_name, removed):
         if self.selected_model in removed:
             self.selected_model = None
         if self.selected_volume in removed:
-            self.selected_volume = None
-        
+            self.selected_volume = None        
 
     @property
     def selected_model(self):
@@ -90,6 +116,8 @@ class QScoreWidget(QFrame):
 
     @selected_model.setter
     def selected_model(self, model):
+        if self._selected_model != model:
+            self.clear_scores()
         self._selected_model = model
         self.triggers.activate_trigger('selected model changed', model)
     
@@ -99,8 +127,28 @@ class QScoreWidget(QFrame):
     
     @selected_volume.setter
     def selected_volume(self, v):
+        if self._selected_volume != v:
+            self.clear_scores()
         self._selected_volume = v
         self.triggers.activate_trigger('selected volume changed', v)
+
+    def clear_scores(self):
+            self._residue_map = None
+            self._atom_scores = None
+            self.update_plot()
+
+
+    def update_plot(self, *_):
+        pw = self.plot_widget
+        if self.selected_model is None or self.selected_volume is None or self._residue_map is None:
+            pw.update_data(None, None)
+            return
+        cid = self.chain_button.selected_chain_id
+        residues = [r for r in self._residue_map.keys() if r.chain_id==cid]
+        scores = [self._residue_map[r][0] for r in residues]
+        pw.update_data(residues, scores)
+
+
 
     def cleanup(self):
         while len(self._handlers):
@@ -109,6 +157,7 @@ class QScoreWidget(QFrame):
 
 class QScorePlot(QFrame):
     MIN_ZOOM = 25
+    DEFAULT_ZOOM = 100
     ZOOM_SCALE = 1.1
     MAX_ZOOM_STEPS_PER_FRAME=5
     def __init__(self, *args, **kwargs):
@@ -118,6 +167,8 @@ class QScorePlot(QFrame):
             FigureCanvasQTAgg as FigureCanvas,
             )
         from matplotlib.widgets import Slider
+        from matplotlib.colors import Normalize
+        import numpy
 
         self._slider_blocked = False
         ml = self.main_layout = DefaultVLayout()
@@ -127,36 +178,55 @@ class QScorePlot(QFrame):
         axes = self.axes = fig.add_subplot(111)
         axes.autoscale(enable=False)
         axes.set_ylim(-1,1)
-        axes.set_xlim(0, self.MIN_ZOOM)
+        axes.set_xlim(0, self.DEFAULT_ZOOM)
         fig.subplots_adjust(bottom=0.25)
 
-        sax = fig.add_axes([0.2, 0.1, 0.65, 0.03])
-        hpos = Slider(sax, '', 0, 1, valinit=0)
 
-        # TEST DATA
-        import numpy as np
-        resnum = np.arange(0.0, 100.0, 0.1)
-        qscore = np.sin(2*np.pi*resnum)
-        l, = axes.plot(resnum,qscore)
-        # /TEST DATA
+        sax = fig.add_axes([0.2, 0.1, 0.65, 0.03])
+        hpos = self._hpos_slider = Slider(sax, '', 0, 1, valinit=0)
+
+        self.residues = []
+        resnum = self.residue_numbers = numpy.zeros(2, dtype=numpy.int32)-1
+        qscore = self.qscores = numpy.array([0,1], dtype=numpy.float32)
+        s = axes.scatter(resnum,qscore, s=4, c=qscore, cmap='inferno_r')
+        self._scatter = s
 
         canvas = self.canvas = FigureCanvas(fig)
-
-        def slider_update(val):
-            if self._slider_blocked:
-                return
-            pos = hpos.val
-            xmin, xmax = axes.get_xlim()
-            xrange = xmax-xmin
-            new_xmin = pos * (resnum.max()-xrange-resnum.min())
-
-            axes.axis([new_xmin,new_xmin+xrange,-1,1])
-            canvas.draw_idle()
         
-        def zoom(event):
-            xmin, xmax = axes.get_xlim()
+        canvas.mpl_connect('scroll_event', self.zoom)
+
+        hpos.on_changed(self._slider_update)
+
+        ml.addWidget(canvas)
+        canvas.draw()
+
+    def _slider_update(self, val):
+        if not len(self.residues) or self._slider_blocked:
+            return
+        axes = self.axes
+        hpos = self._hpos_slider
+        pos = val
+        xmin, xmax = axes.get_xlim()
+        xrange = xmax-xmin
+        resnum = self.residue_numbers
+        new_xmin = pos * (resnum.max()-xrange-resnum.min()) + resnum.min()
+
+        axes.axis([new_xmin,new_xmin+xrange,-1,1])
+        self.canvas.draw_idle()
+    
+    def zoom(self, event=None):
+        if not len(self.residues):
+            return
+        axes = self.axes
+        hpos = self._hpos_slider
+        xmin, xmax = axes.get_xlim()
+        xrange = xmax-xmin
+        resnum = self.residue_numbers
+        if event is not None:
+            if event.inaxes != self.axes:
+                return
             xpoint = event.xdata
-            xrange = xmax-xmin
+            xfrac = (xpoint-xmin)/(xmax-xmin)
             if event.button == 'up':
                 if xrange <= self.MIN_ZOOM:
                     return
@@ -165,27 +235,91 @@ class QScorePlot(QFrame):
                 if xrange >= resnum.max()-resnum.min():
                     return
                 xrange = int(xrange*self.ZOOM_SCALE*-min(event.step, self.MAX_ZOOM_STEPS_PER_FRAME))
-            new_xmin = min(resnum.max()-xrange, max(min(resnum), int(xpoint-xrange/2)))
-            new_xmax = min(max(resnum), new_xmin+xrange)
-            axes.set_xlim([new_xmin, new_xmax])
-            self._slider_blocked = True
-            if xrange >= resnum.max()-resnum.min():
-                hpos.set_active(False)
-                hpos.set_val(0)
-            else:
-                hpos.set_active(True)
-                hpos.set_val((new_xmin-resnum.min())/((resnum.max()-xrange)-resnum.min()))
-            self._slider_blocked = False
+            new_xmin = int(max(min(resnum), min(resnum.max()-xrange, int(xpoint-xrange*xfrac))))
+        else:
+            new_xmin = max(resnum.min(), xmin)
+        new_xmax = min(max(resnum), new_xmin+xrange)
+        axes.set_xlim([new_xmin, new_xmax])
+        self._slider_blocked = True
+        if xrange >= resnum.max()-resnum.min():
+            hpos.set_active(False)
+            hpos.set_val(0)
+        else:
+            hpos.set_active(True)
+            hpos.set_val((new_xmin-resnum.min())/((resnum.max()-xrange)-resnum.min()))
+        self._slider_blocked = False
+
+
+
+    def update_data(self, residues, scores):
+        if residues is None:
+            self.residues = []
+            self._scatter.set_offsets([[0,0]])
+        else:
+            # Convert to a list so we can gracefully handle residue deletions in callbacks
+            import numpy
+            self.residues = list(residues)
+            rmin = min(r.number for r in residues)
+            rmax = max(r.number for r in residues)
+            resnum = self.residue_numbers = numpy.array([r.number for r in residues])
+            self.qscores = scores
+            self._scatter.set_offsets(numpy.array([resnum, scores]).T)
+            self._scatter.set_array(scores)
+            # Update the plot limits if necessary
+            self.zoom(None)
+        self.canvas.draw_idle()
+
+class ChainChooserButton(QPushButton):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.selected_model = None
+        cm = self.chain_menu = QMenu()
+        self.setMenu(cm)
+        cm.aboutToShow.connect(self._populate_available_chains_menu)
+        from chimerax.core.triggerset import TriggerSet
+        t = self.triggers = TriggerSet()
+        t.add_trigger('selected chain changed')
+        self.selected_chain_id = None
+
+    def _selected_model_changed_cb(self, trigger_name, m):
+        self.selected_model = m
+        cids = m.residues.unique_chain_ids
+        if self.selected_chain_id is None or self.selected_chain_id not in cids:
+            self.selected_chain_id = cids[0]
+
+    @property
+    def selected_chain_id(self):
+        return self._selected_chain_id
+    
+    @selected_chain_id.setter
+    def selected_chain_id(self, cid):
+        self._selected_chain_id = cid
+        if cid is None:
+            self.setText('(None)')
+        else:
+            self.setText(cid)
+        self.triggers.activate_trigger('selected chain changed', cid)
         
-        canvas.mpl_connect('scroll_event', zoom)
 
-                
+    def _populate_available_chains_menu(self):
+        cm = self.chain_menu
+        cm.clear()
+        m = self.selected_model
+        if m is None:
+            self.selected_chain_id = None
+            return
+        cids = m.residues.unique_chain_ids
+        for cid in cids:
+            a = cm.addAction(cid)
+            def _cb(*_, c = cid):
+                self.selected_chain_id = c
+            a.triggered.connect(_cb)
+    
+
+            
 
 
-        hpos.on_changed(slider_update)
 
-        ml.addWidget(canvas)
-        canvas.draw()
 
 
 class ModelMenuButtonBase(QPushButton):
@@ -193,7 +327,6 @@ class ModelMenuButtonBase(QPushButton):
         super().__init__(*args, **kwargs)
         self.session = session
         self.owner = owner
-        self._selected_model = None
         if model_type is None:
             raise RuntimeError('Model type must be specified!')
         self.model_type = model_type
@@ -310,8 +443,9 @@ class VolumeMenuButton(ModelMenuButtonBase):
             for v in free:
                 add_entry(v)
             
-                
             
+
+
 
         
 
