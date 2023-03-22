@@ -284,6 +284,9 @@ class ChainChooserButton(QPushButton):
 
     def _selected_model_changed_cb(self, trigger_name, m):
         self.selected_model = m
+        if m is None:
+            self.selected_chain_id = None
+            return
         cids = m.residues.unique_chain_ids
         if self.selected_chain_id is None or self.selected_chain_id not in cids:
             self.selected_chain_id = cids[0]
