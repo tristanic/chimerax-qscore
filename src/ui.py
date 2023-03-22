@@ -189,12 +189,31 @@ class QScorePlot(QFrame):
         self.residues = []
         resnum = self.residue_numbers = numpy.zeros(2, dtype=numpy.int32)-1
         qscore = self.qscores = numpy.array([0,1], dtype=numpy.float32)
-        s = axes.scatter(resnum,qscore, s=4, c=qscore, cmap='inferno_r')
+        def _picker(scatter, mouse_event, x_radius=1):
+            import numpy
+            if mouse_event.inaxes != self.axes:
+                return False, dict()
+            if mouse_event.xdata is None:
+                return False, dict()
+            x = mouse_event.xdata
+            resnums = scatter.get_offsets().T[0]
+            d = numpy.sqrt((x - resnums)**2)
+            closest = d.min()
+            if closest > x_radius:
+                return False, dict()
+            ind = numpy.argmin(d)
+            return True, dict(ind=ind)
+            
+
+
+            
+        s = axes.scatter(resnum,qscore, s=4, c=qscore, cmap='inferno_r', picker=_picker)
         self._scatter = s
 
         canvas = self.canvas = FigureCanvas(fig)
         
         canvas.mpl_connect('scroll_event', self.zoom)
+        canvas.mpl_connect('pick_event', self.on_pick)
 
         hpos.on_changed(self._slider_update)
 
@@ -214,7 +233,7 @@ class QScorePlot(QFrame):
 
         axes.axis([new_xmin,new_xmin+xrange,-1,1])
         self.canvas.draw_idle()
-    
+
     def zoom(self, event=None):
         if not len(self.residues):
             return
@@ -250,7 +269,31 @@ class QScorePlot(QFrame):
             hpos.set_val((new_xmin-resnum.min())/((resnum.max()-xrange)-resnum.min()))
         self._slider_blocked = False
 
+    def on_pick(self, event):
+        if not len(self.residues):
+            return
+        ind = event.ind
+        residue = self.residues[ind]
+        if residue.deleted:
+            return
+        session = residue.session
+        session.selection.clear()
+        residue.atoms.selected = True
+        residue.atoms.intra_bonds.selected = True
+        atomspec = f'#!{residue.structure.id_string}/{residue.chain_id}:{residue.number}'
+        from chimerax.core.commands import run
+        from .clipper_compat import model_managed_by_clipper
 
+        if model_managed_by_clipper(residue.structure):
+            # Just view the model
+            run(session, f'view {atomspec}')
+        else:
+            # TODO: decide what to do here
+            run(session, f'view {atomspec}')
+
+
+            
+            
 
     def update_data(self, residues, scores):
         if residues is None:
