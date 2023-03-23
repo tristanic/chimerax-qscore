@@ -17,7 +17,7 @@ _numpy_print_options = {
     }
 
 
-def q_score(residues, volume, ref_sigma=0.6, points_per_shell = 8, max_rad = 2.0, step=0.1, num_test_points=128, clustering_iterations=5, include_h = False, debug = False, draw_points=False, logger=None, log_interval=1000):
+def q_score(residues, volume, ref_sigma=0.6, points_per_shell = 8, max_rad = 2.0, step=0.1, num_test_points=128, clustering_iterations=5, include_h = False, debug = False, draw_points=False, logger=None, log_interval=1000, deterministic=True):
     from chimerax.geometry import find_close_points, find_closest_points, Places
     import numpy
     from math import floor
@@ -133,7 +133,10 @@ def q_score(residues, volume, ref_sigma=0.6, points_per_shell = 8, max_rad = 2.0
                 local_d_vals[j] = d_vals
             else:
                 points = local_sphere[candidates]
-                labels, closest = spherical_k_means(points, a_coord, points_per_shell, clustering_iterations)
+                if deterministic:
+                    labels, closest = spherical_k_means(points, a_coord, points_per_shell, clustering_iterations, local_pps)
+                else:
+                    labels, closest = spherical_k_means(points, a_coord, points_per_shell, clustering_iterations)
                 if debug:
                     with numpy.printoptions(**_numpy_print_options):
                         print(f'Points: {points}')

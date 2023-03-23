@@ -19,6 +19,11 @@ def map_associated_with_model(m, v):
 
 def ensure_clipper_map_covers_selection(session, m, residues, v):
     if map_associated_with_model(m, v):
-        from chimerax.core.commands import run
-        from chimerax.atomic import concise_residue_spec
-        run(session, f'clipper isolate {concise_residue_spec(session, residues)}')
+        # Only expand to cover the selection if currently in spotlight mode, otherwise we break 
+        # map updating in running ISOLDE simulations.
+        from chimerax.clipper import get_symmetry_handler
+        sh = get_symmetry_handler(m)
+        if sh.spotlight_mode:
+            from chimerax.core.commands import run
+            from chimerax.atomic import concise_residue_spec
+            run(session, f'clipper isolate {concise_residue_spec(session, residues)}')
