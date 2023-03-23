@@ -32,7 +32,7 @@ def q_score(residues, volume, ref_sigma=0.6, points_per_shell = 8, max_rad = 2.0
     matrix, xform = volume.matrix_and_transform(None, 'all', (1,1,1))
     from chimerax.map_data import interpolate_volume_data
     min_d, max_d = min_max_d(volume)
-    sphere8_vertices = unit_sphere_vertices(8)
+    pps_vertices = unit_sphere_vertices(points_per_shell)
     ref_sphere_vertices = unit_sphere_vertices(num_test_points)
 
     a = max_d - min_d
@@ -103,17 +103,17 @@ def q_score(residues, volume, ref_sigma=0.6, points_per_shell = 8, max_rad = 2.0
         local_d_vals = {}
         j = 1
         while shell_rad < max_rad+step/2:
+            local_pps = (pps_vertices*shell_rad) + a_coord
             if shell_rad < 0.7: # about half a C-C bond length
                 # Try the quick way first (should succeed for almost all cases unless geometry is seriously wonky)
-                local_8 = (sphere8_vertices*shell_rad) + a_coord
-                i1, i2, near1 = find_closest_points(local_8, nearby_coords, shell_rad*1.5)
+                i1, i2, near1 = find_closest_points(local_pps, nearby_coords, shell_rad*1.5)
                 closest = near1
                 candidates = i1[closest==ai]
-                if len(candidates)==8:
-                    d_vals = interpolate_volume_data(local_8, xform, matrix, 'linear')[0]
+                if len(candidates)==points_per_shell:
+                    d_vals = interpolate_volume_data(local_pps, xform, matrix, 'linear')[0]
                     if draw_points:
-                        positions.append(local_8)
-                        colors.append(numpy.array([color]*8))
+                        positions.append(local_pps)
+                        colors.append(numpy.array([color]*points_per_shell))
                     local_d_vals[j] = d_vals
                     shell_rad += step
                     j+=1
