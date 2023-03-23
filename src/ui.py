@@ -80,6 +80,12 @@ class QScoreWidget(QFrame):
         pw = self.plot_widget = QScorePlot()
         layout.addWidget(pw)
 
+        ptl = DefaultHLayout()
+        ptt = self._plot_text_data = QLabel()
+        ptl.addWidget(ptt)
+        layout.addLayout(ptl)
+        pw.initialize_hover_text(ptt)
+
         rbl = DefaultHLayout()
         rb = self.recalc_button = QPushButton('Recalculate')
         rbl.addWidget(rb)
@@ -180,7 +186,7 @@ class QScorePlot(QFrame):
         fig = self.plot = Figure()
         axes = self.axes = fig.add_subplot(111)
         axes.autoscale(enable=False)
-        axes.set_ylim(-1,1)
+        axes.set_ylim(0,1)
         axes.set_xlim(0, self.DEFAULT_ZOOM)
         fig.subplots_adjust(bottom=0.25)
 
@@ -210,8 +216,6 @@ class QScorePlot(QFrame):
             ind = numpy.argmin(d)
             return True, dict(ind=ind)
             
-
-
             
         s = axes.scatter(resnum,qscore, s=4, c=qscore, cmap='inferno_r', picker=_picker)
         self._scatter = s
@@ -225,6 +229,28 @@ class QScorePlot(QFrame):
 
         ml.addWidget(canvas)
         canvas.draw()
+
+    def initialize_hover_text(self, target):
+        self._hover_text_target = target
+
+        def _hover(event):
+            if not len(self.residues):
+                target.setText('')
+                return
+            cont, ind = self._scatter.contains(event)
+            if cont:
+                indices = ind['ind']
+                if len(indices):
+                    index = indices[0]
+                r = self.residues[index]
+                if r.deleted:
+                    target.setText('')
+                    return
+                target.setText(f'{r.name} /{r.chain_id}:{r.number}\tQ: {self.qscores[index]:.3f}')
+            else:
+                target.setText('')
+        self.canvas.mpl_connect('motion_notify_event', _hover)
+
 
     def _slider_update(self, val):
         if not len(self.residues) or self._slider_blocked:
@@ -295,11 +321,7 @@ class QScorePlot(QFrame):
             run(session, f'view {atomspec}')
         else:
             # TODO: decide what to do here
-            run(session, f'view {atomspec}')
-
-
-            
-            
+            run(session, f'view {atomspec}')            
 
     def update_data(self, residues, scores):
         if residues is None:
@@ -313,7 +335,9 @@ class QScorePlot(QFrame):
             rmax = max(r.number for r in residues)
             resnum = self.residue_numbers = numpy.array([r.number for r in residues])
             self.qscores = scores
-            self._scatter.set_offsets(numpy.array([resnum, scores]).T)
+            clipped_scores = numpy.array(scores, copy=True)
+            clipped_scores[clipped_scores<0] = 0
+            self._scatter.set_offsets(numpy.array([resnum, clipped_scores]).T)
             self._scatter.set_array(scores)
             # Update the plot limits if necessary
             self.zoom(None)
