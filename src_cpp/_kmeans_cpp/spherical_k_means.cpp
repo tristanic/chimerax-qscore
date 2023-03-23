@@ -57,47 +57,56 @@ std::pair< std::vector<size_t>, std::vector<size_t> > spherical_k_means(const st
     if (points.size() < k)
         throw std::runtime_error("Number of points must be larger than number of clusters!");
 
-    std::vector<vec3> normalized_points;
-    for (size_t i=0; i < points.size(); ++i)
+    auto npoints = points.size();
+    std::vector<vec3> normalized_points(npoints);
+    for (size_t i=0; i < npoints; ++i)
     {
         auto pt = points[i] - center;
         normalize_vector_3d(pt.data());
-        normalized_points.push_back(pt);
+        normalized_points[i] = pt;
     }
 
-    std::vector<vec3> centroids;
-    std::vector<size_t> closest;
-    for (size_t i=0; i < centroids_in.size(); ++i)
+    std::vector<vec3> centroids(k);
+
+    for (size_t i=0; i<k; ++i)
     {
         auto pt = centroids_in[i] - center;
         normalize_vector_3d(pt.data());
-        if (ensure_k) {
-            // To ensure that we end up with k clusters, find the nearest not-already-chosen point from normalized_points and use that instead.
-            std::vector<size_t> indices(points.size());
-            std::iota(indices.begin(), indices.end(), 0);
-            std::vector<double> distances;
-            for (auto &np: normalized_points)
+        centroids[i] = pt;
+    }
+
+    if (ensure_k)
+    {
+        std::vector<size_t> closest;
+        std::vector<size_t> indices(npoints);
+        std::iota(indices.begin(), indices.end(), 0);
+        std::vector<double> distances(npoints);
+
+        std::vector<vec3> new_centroids(k);
+        for (size_t i=0; i<k; ++i)
+        {
+            auto& pt = centroids[i];
+            for (size_t j=0; j<npoints; ++j)
             {
-                distances.push_back(-cosine_similarity(pt, np));
+                distances[j] = -cosine_similarity(pt, normalized_points[j]);
             }
             std::sort(indices.begin(), indices.end(), std::bind(_compare, std::placeholders::_1, std::placeholders::_2, distances));
             for (auto idx: indices) {
                 if (std::find(closest.begin(), closest.end(), idx) == closest.end())
                 {
                     closest.push_back(idx);
-                    centroids.push_back(normalized_points[idx]);
+                    new_centroids[i] = normalized_points[idx];
                     break;
                 }
             }
-            
-        } else {
-            centroids.push_back(pt);
+
         }
+        centroids = new_centroids;
     }
 
-    std::vector<size_t> labels(points.size());
-    closest.clear();
 
+    std::vector<size_t> labels(npoints);
+    std::vector<size_t> closest;
     // initialise k random centroids
 
 
@@ -189,6 +198,7 @@ std::pair< std::vector<size_t>, std::vector<size_t> > spherical_k_means(const st
             idx = (size_t)rand() % points.size();
         }
         centroids[i] = points[idx];
+        center_indices.push_back(idx);
     }
     return spherical_k_means(points, center, k, max_iterations, centroids, false);
 }
@@ -205,11 +215,13 @@ PYBIND11_MODULE(_kmeans, m) {
         if (center.ndim() !=1 || center.shape(0) !=3)
             throw std::runtime_error("Center should be a 1 x 3 array giving x,y,z coordinates of the sphere center!");
         std::vector<vec3> pointsvec;
+        auto p = points.unchecked<2>();
         for (size_t i=0; i<points.shape(0); ++i)
         {
-            pointsvec.push_back(vec3{ {points.at(i,0), points.at(i,1), points.at(i,2)} });
+            pointsvec.push_back(vec3{ {p(i,0), p(i,1), p(i,2)} });
         }
-        vec3 vcenter = {center.at(0), center.at(1), center.at(2)};
+        auto c = center.unchecked<1>();
+        vec3 vcenter = {c(0), c(1), c(2)};
         auto result = spherical_k_means(pointsvec, vcenter, k, max_iterations);
         py::array rlabels(result.first.size(), result.first.data());
         py::array rclosest(result.second.size(), result.second.data());
@@ -222,16 +234,19 @@ PYBIND11_MODULE(_kmeans, m) {
             throw std::runtime_error("Center should be a 1 x 3 array giving x,y,z coordinates of the sphere center!");
         if (centroids.ndim() != 2 || centroids.shape(0) != k)
             throw std::runtime_error("Number of seed centroids must equal k!");
-        std::vector<vec3> pointsvec;
+        std::vector<vec3> pointsvec(points.shape(0));
+        auto p = points.unchecked<2>();
         for (size_t i=0; i<points.shape(0); ++i)
         {
-            pointsvec.push_back(vec3{ {points.at(i,0), points.at(i,1), points.at(i,2)} });
+            pointsvec[i] = vec3{ {p(i,0), p(i,1), p(i,2)} };
         }
-        vec3 vcenter = {center.at(0), center.at(1), center.at(2)};
-        std::vector<vec3> centroids_vec;
+        auto c = center.unchecked<1>();
+        vec3 vcenter = {c(0), c(1), c(2)};
+        std::vector<vec3> centroids_vec(centroids.shape(0));
+        auto cv = centroids.unchecked<2>();
         for (size_t i=0; i<centroids.shape(0); ++i)
         {
-            centroids_vec.push_back(vec3{ {centroids.at(i,0), centroids.at(i,1), centroids.at(i,2)}});
+            centroids_vec[i] =vec3{ {cv(i,0), cv(i,1), cv(i,2)}};
         }
         auto result = spherical_k_means(pointsvec, vcenter, k, max_iterations, centroids_vec, true);
         py::array rlabels(result.first.size(), result.first.data());
