@@ -8,7 +8,6 @@ from Qt.QtWidgets import (
 )
 from Qt import QtCore
 
-
 class DefaultVLayout(QVBoxLayout):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -89,9 +88,6 @@ class QScoreWidget(QFrame):
         rbl = DefaultHLayout()
         rb = self.recalc_button = QPushButton('Recalculate')
         rbl.addWidget(rb)
-        dcb = self.deterministic_check_box = QCheckBox('Deterministic')
-        dcb.setChecked(True)
-        rbl.addWidget(dcb)
         rbl.addStretch()
         rbl.addWidget(QLabel('Chain: '))
         cb = self.chain_button = ChainChooserButton()
@@ -105,7 +101,7 @@ class QScoreWidget(QFrame):
                 from chimerax.core.errors import UserError
                 raise UserError('Must select a model and map first!')
             from chimerax.core.commands import run
-            residue_map, atom_scores = run(session, f'qscore #{m.id_string} to #{v.id_string} deterministic {dcb.isChecked()}')
+            residue_map, atom_scores = run(session, f'qscore #{m.id_string} to #{v.id_string}')
             self._residue_map = residue_map
             self._atom_scores = atom_scores
             self.update_plot()

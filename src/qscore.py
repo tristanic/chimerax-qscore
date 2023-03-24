@@ -16,8 +16,13 @@ _numpy_print_options = {
     'suppress':True
     }
 
+RANDOM_SEED=1985
 
-def q_score(residues, volume, ref_sigma=0.6, points_per_shell = 8, max_rad = 2.0, step=0.1, num_test_points=128, clustering_iterations=5, include_h = False, debug = False, draw_points=False, logger=None, log_interval=1000, deterministic=True):
+def q_score(residues, volume, 
+            ref_sigma=0.6, points_per_shell = 8, max_rad = 2.0, step=0.1, num_test_points=128, 
+            clustering_iterations=5, include_h = False, debug = False, draw_points=False, 
+            logger=None, log_interval=1000, 
+            randomize_shell_points=True, random_seed=RANDOM_SEED):
     from chimerax.geometry import find_close_points, find_closest_points, Places
     import numpy
     from math import floor
@@ -28,7 +33,7 @@ def q_score(residues, volume, ref_sigma=0.6, points_per_shell = 8, max_rad = 2.0
     session = residues.unique_structures[0].session
     from .clipper_compat import ensure_clipper_map_covers_selection
     ensure_clipper_map_covers_selection(session, m, residues, volume)
-    from ._kmeans import spherical_k_means
+    from . import _kmeans
     matrix, xform = volume.matrix_and_transform(None, 'all', (1,1,1))
     from chimerax.map_data import interpolate_volume_data
     min_d, max_d = min_max_d(volume)
@@ -55,7 +60,7 @@ def q_score(residues, volume, ref_sigma=0.6, points_per_shell = 8, max_rad = 2.0
         from chimerax.core.colors import random_colors
         d = Drawing('shell points')
         v, n, t = sphere_geometry2(24)
-        v *= (step*0.25)
+        v *= (0.05)
         d.set_geometry(v, n, t)
         dm = Model('shell points', session)
         dm.add_drawing(d)
@@ -133,10 +138,10 @@ def q_score(residues, volume, ref_sigma=0.6, points_per_shell = 8, max_rad = 2.0
                 local_d_vals[j] = d_vals
             else:
                 points = local_sphere[candidates]
-                if deterministic:
-                    labels, closest = spherical_k_means(points, a_coord, points_per_shell, clustering_iterations, local_pps)
+                if not randomize_shell_points:
+                    labels, closest = _kmeans.spherical_k_means_defined(points, a_coord, points_per_shell, clustering_iterations, local_pps)
                 else:
-                    labels, closest = spherical_k_means(points, a_coord, points_per_shell, clustering_iterations)
+                    labels, closest = _kmeans.spherical_k_means_random(points, a_coord, points_per_shell, clustering_iterations, random_seed+j)
                 if debug:
                     with numpy.printoptions(**_numpy_print_options):
                         print(f'Points: {points}')

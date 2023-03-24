@@ -11,6 +11,7 @@
 
 typedef std::array<double, 3> vec3;
 vec3 operator-(const vec3& first, const vec3& second) { return vec3{first[0]-second[0], first[1]-second[1], first[2]-second[2]};} 
+vec3 operator+(const vec3& first, const vec3& second) { return vec3{first[0]+second[0], first[1]+second[1], first[2]+second[2]};} 
 
 
 template <typename T>
@@ -107,7 +108,6 @@ std::pair< std::vector<size_t>, std::vector<size_t> > spherical_k_means(const st
 
     std::vector<size_t> labels(npoints);
     std::vector<size_t> closest;
-    // initialise k random centroids
 
 
     // perform k-means clustering
@@ -183,19 +183,22 @@ std::pair< std::vector<size_t>, std::vector<size_t> > spherical_k_means(const st
         }
         closest.push_back(closest_index);
     } 
-
     return {labels, closest};
 }
 
-std::pair< std::vector<size_t>, std::vector<size_t> > spherical_k_means(const std::vector<vec3>& points, const vec3& center, size_t k, size_t max_iterations)
+std::pair< std::vector<size_t>, std::vector<size_t> > spherical_k_means(const std::vector<vec3>& points, const vec3& center, size_t k, size_t max_iterations, unsigned int random_seed)
 {
     std::vector<size_t> center_indices;
     std::vector<vec3> centroids(k);
+    // initialise k random centroids
+    std::default_random_engine e;
+    e.seed(random_seed);
+    std::uniform_int_distribution<size_t> dist(0, points.size()-1);
     for (size_t i=0; i<k; ++i)
     {
-        size_t idx = (size_t)rand() % points.size();
+        size_t idx = dist(e);
         while (std::find(center_indices.begin(), center_indices.end(), idx) != center_indices.end()) {
-            idx = (size_t)rand() % points.size();
+            idx = dist(e);
         }
         centroids[i] = points[idx];
         center_indices.push_back(idx);
@@ -209,7 +212,7 @@ PYBIND11_MODULE(_kmeans, m) {
     m.doc() = "k-means clustering of points on a spherical surface. Considers only angular differences "
         "(i.e. all vectors will be normalised to the unit sphere for comparison).";
 
-    m.def("spherical_k_means", [](py::array_t<double> points, py::array_t<double> center, size_t k, size_t max_iterations) {
+    m.def("spherical_k_means_random", [](py::array_t<double> points, py::array_t<double> center, size_t k, size_t max_iterations, unsigned int random_seed) {
         if (points.ndim() != 2 || points.shape(1) != 3)
             throw std::runtime_error ("Points should be a n x 3 array of Cartesian coordinates!");
         if (center.ndim() !=1 || center.shape(0) !=3)
@@ -222,12 +225,12 @@ PYBIND11_MODULE(_kmeans, m) {
         }
         auto c = center.unchecked<1>();
         vec3 vcenter = {c(0), c(1), c(2)};
-        auto result = spherical_k_means(pointsvec, vcenter, k, max_iterations);
+        auto result = spherical_k_means(pointsvec, vcenter, k, max_iterations, random_seed);
         py::array rlabels(result.first.size(), result.first.data());
         py::array rclosest(result.second.size(), result.second.data());
         return std::make_tuple(rlabels, rclosest);
     })
-    .def("spherical_k_means", [](py::array_t<double> points, py::array_t<double> center, size_t k, size_t max_iterations, py::array_t<double> centroids) {
+    .def("spherical_k_means_defined", [](py::array_t<double> points, py::array_t<double> center, size_t k, size_t max_iterations, py::array_t<double> centroids) {
         if (points.ndim() != 2 || points.shape(1) != 3)
             throw std::runtime_error ("Points should be a n x 3 array of Cartesian coordinates!");
         if (center.ndim() !=1 || center.shape(0) !=3)

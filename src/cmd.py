@@ -8,7 +8,7 @@ from chimerax.atomic import ResiduesArg
 
 
 def qscore(session, residues, to_volume=None, reference_gaussian_sigma=0.6, points_per_shell=8, 
-            max_shell_radius=2.0, shell_radius_step=0.1, include_hydrogens=False, deterministic=True):
+            max_shell_radius=2.0, shell_radius_step=0.1, include_hydrogens=False, randomize_shell_points=True):
     if to_volume is None:
         from chimerax.core.errors import UserError
         raise UserError("Must specify a map to compare the model to!")
@@ -18,7 +18,7 @@ def qscore(session, residues, to_volume=None, reference_gaussian_sigma=0.6, poin
                                        max_rad=max_shell_radius, 
                                        step=shell_radius_step,
                                        include_h=include_hydrogens, 
-                                       deterministic=deterministic, 
+                                       randomize_shell_points=randomize_shell_points, 
                                        logger=session.logger)
     session.logger.info(f'Overall mean Q-Score: {atom_scores.mean():.2f}')
     return residue_map, atom_scores
@@ -37,6 +37,6 @@ qscore_desc = CmdDesc(
         ("max_shell_radius", Bounded(FloatArg, min=0.6, max=2.5)),
         ("shell_radius_step", Bounded(FloatArg, min=0.05, max=0.5)),
         ("include_hydrogens", BoolArg),
-        ("deterministic", BoolArg)
+        ("randomize_shell_points", BoolArg)
     ]
     )
