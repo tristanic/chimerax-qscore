@@ -2,7 +2,7 @@ from chimerax.ui.gui import MainToolWindow
 
 from Qt.QtWidgets import (
     QFrame, QLabel,
-    QPushButton, QMenu,
+    QPushButton, QMenu, QRadioButton,
     QHBoxLayout, QVBoxLayout,
 )
 from Qt import QtCore
@@ -60,6 +60,7 @@ class QScoreWidget(QFrame):
 
         self._residue_map = None
         self._atom_scores = None
+        self._query_atoms = None
 
         layout = self.main_layout = DefaultVLayout()
         self.setLayout(layout)
@@ -87,6 +88,9 @@ class QScoreWidget(QFrame):
         rbl = DefaultHLayout()
         rb = self.recalc_button = QPushButton('Recalculate')
         rbl.addWidget(rb)
+        ms = self.mode_selector = AverageModeChooser()
+        rbl.addWidget(ms)
+        ms.triggers.add_handler('mode changed', self.update_plot)
         rbl.addStretch()
         rbl.addWidget(QLabel('Chain: '))
         cb = self.chain_button = ChainChooserButton()
@@ -100,9 +104,10 @@ class QScoreWidget(QFrame):
                 from chimerax.core.errors import UserError
                 raise UserError('Must select a model and map first!')
             from chimerax.core.commands import run
-            residue_map, atom_scores = run(session, f'qscore #{m.id_string} to #{v.id_string}')
+            residue_map, (query_atoms, atom_scores) = run(session, f'qscore #{m.id_string} to #{v.id_string}')
             self._residue_map = residue_map
             self._atom_scores = atom_scores
+            self._query_atoms = query_atoms
             self.update_plot()
         rb.clicked.connect(_recalc)
         layout.addLayout(rbl)
@@ -147,17 +152,87 @@ class QScoreWidget(QFrame):
         if self.selected_model is None or self.selected_volume is None or self._residue_map is None:
             pw.update_data(None, None)
             return
+        import numpy
         cid = self.chain_button.selected_chain_id
+        average_mode = self.mode_selector.mode
         residues = [r for r in self._residue_map.keys() if r.chain_id==cid]
-        scores = [self._residue_map[r][0] for r in residues]
+        atoms = self._query_atoms
+        chain_mask = atoms.residues.chain_ids==cid
+        ascores = self._atom_scores
+        from chimerax.atomic import Residue, Residues
+        residues = Residues(residues)
+        if average_mode == 'Whole residues':
+            atom_mask = None
+            scores = [self._residue_map[r][0] for r in residues]
+        elif average_mode == 'Worst atoms':
+            atom_mask = None
+            scores = [self._residue_map[r][1] for r in residues]
+        elif average_mode == 'Backbone':
+            atom_mask = atoms.is_backbones()
+        elif average_mode == 'Sidechains':
+            atom_mask = atoms.is_side_onlys
+        elif average_mode == 'Ligands':
+            atom_mask = atoms.residues.polymer_types == Residue.PT_NONE
+        else:
+            raise RuntimeError(f'Unrecognised averaging mode: "{average_mode}"')
+        if atom_mask is not None:
+            atoms = atoms[numpy.logical_and(atom_mask, chain_mask)]
+            ascores = ascores[atom_mask]
+            residues = atoms.unique_residues
+            scores = []
+            for r in residues:
+                indices = atoms.indices(r.atoms)
+                indices = indices[indices!=-1]
+                scores.append(ascores[indices].mean())            
         pw.update_data(residues, scores)
-
-
 
     def cleanup(self):
         while len(self._handlers):
             h = self._handlers.pop()
             h.remove()
+
+class AverageModeChooser(QFrame):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from chimerax.core.triggerset import TriggerSet
+        self.triggers = TriggerSet()
+        self.triggers.add_trigger('mode changed')
+        layout = DefaultHLayout()
+        self.setLayout(layout)
+        tooltips = {
+            'Whole residues': '<span>Mean Q-score for all non-hydrogen atoms in a each residue.</span>',
+            'Worst atoms': '<span>Q-score for the worst non-hydrogen atom in each residue.</span>',
+            'Backbone': '<span>Mean Q-score for non-hydrogen backbone atoms in each residue. Excludes ligands.</span>',
+            'Sidechains': '<span>Mean Q-score for non-hydrogen sidechain atoms in each residue. Excludes ligands.<span>',
+            'Ligands': '<span>Mean Q-score for non-hydrogen atoms in each ligand.</span>'
+        }
+        self.modes = {
+            'Whole residues': QRadioButton('Whole residues'),
+            'Worst atoms': QRadioButton('Worst atoms'),
+            'Backbone': QRadioButton('Backbone'),
+            'Sidechains': QRadioButton('Sidechains'),
+            'Ligands': QRadioButton('Ligands')
+        }
+        for key, button in self.modes.items():
+            button.setToolTip(tooltips[key])
+        self.modes['Whole residues'].setChecked(True)
+        for mb in self.modes.values():
+            layout.addWidget(mb)
+            def _cb(mode):
+                for mname, mde in self.modes.items():
+                    if mde == mode:
+                        break
+                self.triggers.activate_trigger('mode changed', mname)
+            mb.toggled.connect(lambda:_cb(mb))
+    
+    @property
+    def mode(self):
+        for mode, button in self.modes.items():
+            if button.isChecked():
+                return mode
+    
+
+
 
 class QScorePlot(QFrame):
     MIN_ZOOM = 25

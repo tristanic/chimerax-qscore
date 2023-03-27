@@ -240,7 +240,7 @@ def q_score(residues, volume,
 
     if logger is not None:
         logger.status('')
-    return residue_scores, q_scores
+    return residue_scores, (query_atoms, q_scores)
 
 
 def test_q_score(session):
