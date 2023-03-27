@@ -138,6 +138,12 @@ class QScoreWidget(QFrame):
         if self._selected_volume != v:
             self.clear_scores()
         self._selected_volume = v
+        if v is not None:
+            from .clipper_compat import map_associated_with_model
+            if not map_associated_with_model(self.selected_model, v):
+                if any([s.display_style=='solid' for s in v.surfaces]):
+                    from chimerax.core.commands import run
+                    run (self.session, f'transparency #{v.id_string} 60')
         self.triggers.activate_trigger('selected volume changed', v)
 
     def clear_scores(self):
@@ -149,7 +155,7 @@ class QScoreWidget(QFrame):
     def update_plot(self, *_):
         pw = self.plot_widget
         if self.selected_model is None or self.selected_volume is None or self._residue_map is None:
-            pw.update_data(None, None)
+            pw.update_data(None, None, None)
             return
         import numpy
         cid = self.chain_button.selected_chain_id
@@ -183,7 +189,7 @@ class QScoreWidget(QFrame):
                 indices = atoms.indices(r.atoms)
                 indices = indices[indices!=-1]
                 scores.append(ascores[indices].mean())            
-        pw.update_data(residues, scores)
+        pw.update_data(residues, scores, self.selected_volume)
 
     def cleanup(self):
         while len(self._handlers):
@@ -259,6 +265,7 @@ class QScorePlot(QFrame):
         axes.set_xlim(0, self.DEFAULT_ZOOM)
         fig.subplots_adjust(bottom=0.25)
 
+        self.volume = None
 
         sax = fig.add_axes([0.2, 0.1, 0.65, 0.03])
         hpos = self._hpos_slider = Slider(sax, '', 0, 1, valinit=0)
@@ -402,15 +409,31 @@ class QScorePlot(QFrame):
         atomspec = f'#!{residue.structure.id_string}/{residue.chain_id}:{residue.number}'
         from chimerax.core.commands import run
         from .clipper_compat import model_managed_by_clipper
+        m = residue.structure
 
-        if model_managed_by_clipper(residue.structure):
+        if model_managed_by_clipper(m):
             # Just view the model
             run(session, f'view {atomspec}')
         else:
             # TODO: decide what to do here
-            run(session, f'view {atomspec}')            
+            from chimerax.atomic import Residues, concise_residue_spec
+            neighbors = set([residue])
+            # Quick and (very) dirty way to expand the selection. Should probably do something more efficient.
+            for _ in range(3):
+                new_neighbors = []
+                for n in neighbors:
+                    for nn in n.neighbors:
+                        if nn not in neighbors:
+                            new_neighbors.append(nn)
+                neighbors.update(new_neighbors)
+            residues = Residues(neighbors)
+            argspec = concise_residue_spec(session, residues)
+            run(session, f'surf zone #{self.volume.id_string} near {argspec} dist 3', log=False)
+            run(session, f'~cartoon #{m.id_string}; hide #{m.id_string}; show {argspec}; cartoon {argspec}', log=False)
+            run(session, f'view {atomspec}', log=False)            
 
-    def update_data(self, residues, scores):
+    def update_data(self, residues, scores, volume):
+        self.volume = volume
         if residues is None:
             self.residues = []
             self._scatter.set_offsets([[0,0]])
