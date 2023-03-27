@@ -302,22 +302,28 @@ class QScorePlot(QFrame):
     def initialize_hover_text(self, target):
         self._hover_text_target = target
 
-        def _hover(event):
+        def _hover(event, x_radius=1):
             if not len(self.residues):
                 target.setText('')
                 return
-            cont, ind = self._scatter.contains(event)
-            if cont:
-                indices = ind['ind']
-                if len(indices):
-                    index = indices[0]
-                r = self.residues[index]
-                if r.deleted:
-                    target.setText('')
-                    return
-                target.setText(f'{r.name} /{r.chain_id}:{r.number}\tQ: {self.qscores[index]:.3f}')
-            else:
+            if event.inaxes != self.axes:
                 target.setText('')
+                return
+            import numpy
+            x = event.xdata
+            resnums = self._scatter.get_offsets().T[0]
+            d = numpy.sqrt((x-resnums)**2)
+            closest = d.min()
+            if closest > x_radius:
+                target.setText('')
+                return
+            ind = numpy.argmin(d)
+            r = self.residues[ind]
+            if r.deleted:
+                target.setText('{residue deleted}')
+                return
+            target.setText(f'{r.name} /{r.chain_id}:{r.number}\tQ: {self.qscores[ind]:.3f}')
+            return
         self.canvas.mpl_connect('motion_notify_event', _hover)
 
 
