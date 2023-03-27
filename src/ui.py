@@ -1,10 +1,9 @@
 from chimerax.ui.gui import MainToolWindow
 
 from Qt.QtWidgets import (
-    QWidget, QFrame, QScrollArea, QLabel,
-    QPushButton, QMenu, QCheckBox,
+    QFrame, QLabel,
+    QPushButton, QMenu,
     QHBoxLayout, QVBoxLayout,
-    QSpinBox, QDoubleSpinBox
 )
 from Qt import QtCore
 
