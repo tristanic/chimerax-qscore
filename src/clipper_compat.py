@@ -8,6 +8,8 @@ def clipper_installed():
 def model_managed_by_clipper(m):
     if not clipper_installed():
         return False
+    if m is None:
+        return False
     from chimerax.clipper.symmetry import SymmetryManager
     return isinstance(m.parent, SymmetryManager)
 

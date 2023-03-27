@@ -489,6 +489,8 @@ class VolumeMenuButton(ModelMenuButtonBase):
         mmm = self.master_model_menu
         mmm.clear()
         assoc, free, other = self._find_available_models()
+        if not any([len(mlist) for mlist in (assoc, free, other)]):
+            return
         from .clipper_compat import model_managed_by_clipper
         def add_entry(v):
             a = mmm.addAction(f'{v.id_string}: {v.name}')
