@@ -229,8 +229,18 @@ PYBIND11_MODULE(_kmeans, m) {
         py::array rlabels(result.first.size(), result.first.data());
         py::array rclosest(result.second.size(), result.second.data());
         return std::make_tuple(rlabels, rclosest);
-    })
-    .def("spherical_k_means_defined", [](py::array_t<double> points, py::array_t<double> center, size_t k, size_t max_iterations, py::array_t<double> centroids) {
+    },
+        "Perform spherical k-means clustering of the given points, considering only angular distance. All input points "
+        "will be mapped to the unit sphere by subtracting `center` and normalising to unit length prior to clustering "
+        "into `k` clusters. If `max_iterations` is set to zero the algorithm will run to convergence. The initial "
+        "seed centroid for each cluster will be randomly chosen from the input points. The default `random_seed` "
+        "is zero. Repeated runs with the same random seed should give identical results.\n"
+        "Returns:\n"
+        " - an array of integers of the same length as `points`, denoting the cluster to which each point should be assigned;\n"
+        " - an array of integers of length `k` giving the index in `points` of the point closest to the centroid of each cluster.",
+        py::arg("points"), py::arg("center"), py::arg("k"), py::arg("max_iterations")=0, py::arg("random_seed")=0
+    )
+    .def("spherical_k_means_defined", [](py::array_t<double> points, py::array_t<double> center, size_t k, py::array_t<double> centroids, size_t max_iterations) {
         if (points.ndim() != 2 || points.shape(1) != 3)
             throw std::runtime_error ("Points should be a n x 3 array of Cartesian coordinates!");
         if (center.ndim() !=1 || center.shape(0) !=3)
@@ -255,7 +265,17 @@ PYBIND11_MODULE(_kmeans, m) {
         py::array rlabels(result.first.size(), result.first.data());
         py::array rclosest(result.second.size(), result.second.data());
         return std::make_tuple(rlabels, rclosest);
-    });
+    },
+        "Perform spherical k-means clustering of the given points, considering only angular distance. All input points "
+        "will be mapped to the unit sphere by subtracting `center` and normalising to unit length prior to clustering "
+        "into `k` clusters. If `max_iterations` is set to zero the algorithm will run to convergence. The initial "
+        "seed centroid for each cluster will be chosen as the nearest unused point (in angular space) to each point in "
+        "`seed_centroids`.\n"
+        "Returns:\n"
+        " - an array of integers of the same length as `points`, denoting the cluster to which each point should be assigned;\n"
+        " - an array of integers of length `k` giving the index in `points` of the point closest to the centroid of each cluster.",
+        py::arg("points"), py::arg("center"), py::arg("k"), py::arg("seed_centroids"), py::arg("max_iterations")=0
+    );
 
 };
 

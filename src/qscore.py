@@ -23,6 +23,58 @@ def q_score(residues, volume,
             clustering_iterations=5, include_h = False, debug = False, draw_points=False, 
             logger=None, log_interval=1000, 
             randomize_shell_points=True, random_seed=RANDOM_SEED):
+    '''
+    Implementation of the map-model Q-score as described in Pintille et al. (2020): https://www.nature.com/articles/s41592-020-0731-1.
+
+    If the model is well-fitted to the map, the Q-score is essentially an atom-by-atom estimate of "resolvability"
+    (i.e. how much the map tells us about the true position of the atom). If the model is *not* well-fitted, then 
+    low Q-scores are good pointers to possible problem regions. In practice, of course, usually we have a mixture of 
+    both situations.
+
+    This version of the algorithm has a few minor modifications compared to the original implementation aimed at 
+    improving overall speed. As a result the scores it returns are not identical to the original, typically differing by 
+    +/- 0.04 in individual atom scores and +/- 0.02 in residue averages. This difference can be explained by the different 
+    choice of test points, and reflects the underlying sampling uncertainty in the method. 
+    
+    This implementation works as follows:
+
+    - For each atom, define a set of shells in steps of `step` angstroms out to `max_rad` angstroms.
+    - For each shell, try to find at least `points_per_shell` probe points closer to the test atom than 
+      any other atom:
+
+      - For radii smaller than about half a bond length, first try a set of `points_per_shell`
+        points evenly spread around the spherical surface. 
+      - For larger radii (or if this quick approach fails to find enough points on smaller radii), 
+        start with `num_test_points` evenly spread on the sphere surface, remove points closer to other atoms 
+        than the test atom. If more than `points_per_shell` points remain, perform up to `clustering_iterations`
+        rounds of k-means clustering to find `points_per_shell` clusters, and choose the point nearest to the 
+        centroid of each cluster. If <= `points_per_shell` points remain, just do the best with what we have.
+        By default, the "seed" centroids for each cluster are chosen pseudo-randomly from the input points.
+        Using the same `random_seed` will give the same result each time; varying `random_seed` over multiple 
+        runs can be used to give an idea of the underlying uncertainty in the algorithm. If `randomize_shell_points`
+        is False, the seed centroids will instead be the closest point (in spherical coordinates) to each of 
+        `points_per_shell` evenly-spaced points on a unit sphere. While this may intuitively seem preferable,
+        in practice for tightly-packed atoms it leads to oversampling of the "junctions" with other atoms, and 
+        undersampling of the unhindered space. 
+
+    - Interpolate the local density value at each shell point (including at the centre of the atom itself),
+      and calculate the Q-score as the normalised-about-the-mean cross-correlation between the measured values 
+      and an ideal Gaussian with `ref_sigma` fall-off (the default of 0.6 corresponds to approximately the 
+      expected fall-off in a 1.3 Angstrom map).
+
+    On a typical machine, run time is on the order of 1 ms/atom (i.e. from 10s to a few minutes for typical 
+    cryo-EM models). If the ChimeraX logger (`session.logger`) is passed in as the `logger` argument, the approximate
+    remaining time will be printed to the status bar every `log_interval` atoms.
+
+    The `debug` and `draw_points` arguments are meant primarily for debugging, and should only be used for 
+    small selections at a time (`debug` is *very*  verbose, and `draw_points` leads to the drawing of approx.
+    `max_rad`/`step`*`points_per_shell` ~ 160 points per atom).
+
+    Returns:
+
+    - a {Residue: (mean_q_score, worst_atom_score)} dict
+    - a numpy array with the Q-scores for all atoms in order of `residues.atoms` 
+    '''
     from chimerax.geometry import find_close_points, find_closest_points, Places
     import numpy
     from math import floor
@@ -139,7 +191,7 @@ def q_score(residues, volume,
             else:
                 points = local_sphere[candidates]
                 if not randomize_shell_points:
-                    labels, closest = _kmeans.spherical_k_means_defined(points, a_coord, points_per_shell, clustering_iterations, local_pps)
+                    labels, closest = _kmeans.spherical_k_means_defined(points, a_coord, points_per_shell, local_pps, clustering_iterations)
                 else:
                     labels, closest = _kmeans.spherical_k_means_random(points, a_coord, points_per_shell, clustering_iterations, random_seed+j)
                 if debug:
