@@ -338,7 +338,7 @@ class QScorePlot(QFrame):
         resnum = self.residue_numbers
         new_xmin = pos * (resnum.max()-xrange-resnum.min()) + resnum.min()
 
-        axes.axis([new_xmin,new_xmin+xrange,-1,1])
+        axes.set_xlim([new_xmin,new_xmin+xrange])
         self.canvas.draw_idle()
 
     def zoom(self, event=None):
