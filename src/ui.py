@@ -112,7 +112,6 @@ class QScoreWidget(QFrame):
         rb.clicked.connect(_recalc)
         layout.addLayout(rbl)
 
-
     def _models_removed_cb(self, trigger_name, removed):
         if self.selected_model in removed:
             self.selected_model = None
@@ -236,7 +235,7 @@ class AverageModeChooser(QFrame):
 
 class QScorePlot(QFrame):
     MIN_ZOOM = 25
-    DEFAULT_ZOOM = 100
+    DEFAULT_ZOOM = 250
     ZOOM_SCALE = 1.1
     MAX_ZOOM_STEPS_PER_FRAME=5
     def __init__(self, *args, **kwargs):
@@ -341,9 +340,16 @@ class QScorePlot(QFrame):
             return
         axes = self.axes
         hpos = self._hpos_slider
-        xmin, xmax = axes.get_xlim()
+        xmin, xmax = axes.get_xlim()            
         xrange = xmax-xmin
         resnum = self.residue_numbers
+        if xmax > resnum.max():
+            xmax = resnum.max()
+            xmin = xmax-xrange
+        if xmin < resnum.min():
+            xmin = resnum.min()
+            xmax = xmin+xrange
+
         if event is not None:
             if event.inaxes != self.axes:
                 return
@@ -370,6 +376,11 @@ class QScorePlot(QFrame):
             hpos.set_active(True)
             hpos.set_val((new_xmin-resnum.min())/((resnum.max()-xrange)-resnum.min()))
         self._slider_blocked = False
+
+    def zoom_extents(self):
+        resnum = self.residue_numbers
+        self.axes.set_xlim([resnum.min(), resnum.max()])
+        self.zoom()
 
     def on_pick(self, event):
         if not len(self.residues):
@@ -400,6 +411,9 @@ class QScorePlot(QFrame):
         else:
             # Convert to a list so we can gracefully handle residue deletions in callbacks
             import numpy
+            update_zoom = False
+            if len(residues) != len(self.residues):
+                update_zoom = True
             self.residues = list(residues)
             rmin = min(r.number for r in residues)
             rmax = max(r.number for r in residues)
@@ -409,8 +423,11 @@ class QScorePlot(QFrame):
             clipped_scores[clipped_scores<0] = 0
             self._scatter.set_offsets(numpy.array([resnum, clipped_scores]).T)
             self._scatter.set_array(scores)
-            # Update the plot limits if necessary
-            self.zoom(None)
+            # If the number of plotted residues changes, zoom to the full extent of the data.
+            if update_zoom:
+                self.zoom_extents()
+            else:
+                self.zoom(None)
         self.canvas.draw_idle()
 
 class ChainChooserButton(QPushButton):
