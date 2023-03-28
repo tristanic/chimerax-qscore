@@ -434,7 +434,7 @@ class QScorePlot(QFrame):
 
     def update_data(self, residues, scores, volume):
         self.volume = volume
-        if residues is None:
+        if residues is None or not len(residues):
             self.residues = []
             self._scatter.set_offsets([[0,0]])
         else:
