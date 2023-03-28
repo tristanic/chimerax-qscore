@@ -76,6 +76,9 @@ install:	pyproject.toml $(SRCS) generated_files
 wheel:	pyproject.toml $(SRCS) generated_files
 	$(RUN) "devel build . exit true"
 
+docs:
+	$(CHIMERAX_EXE) -m sphinx docs/source src/docs/user
+
 test:
 	for t in $(wildcard test*.cxc) $(wildcard test*.py);\
 		do $(CHIMERAX_EXE) --exit --nogui $$t;\
