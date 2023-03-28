@@ -516,7 +516,8 @@ class ChainChooserButton(QPushButton):
 
 
 class ModelMenuButtonBase(QPushButton):
-    def __init__(self, session, owner,  *args, model_type=None, trigger_name=None, tooltip='', **kwargs):
+    DEFAULT_TOOLTIP=''
+    def __init__(self, session, owner,  *args, model_type=None, trigger_name=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.session = session
         self.owner = owner
@@ -527,7 +528,7 @@ class ModelMenuButtonBase(QPushButton):
         mmm.aboutToShow.connect(self._populate_available_models_menu)
         self.setMenu(mmm)
         self.setMinimumSize(QtCore.QSize(150,0))
-        self.setToolTip(tooltip)
+        self.setToolTip(self.DEFAULT_TOOLTIP)
         self._set_button_text(None)
         if trigger_name is not None:
             owner.triggers.add_handler(trigger_name, self._model_changed_cb)
@@ -548,16 +549,19 @@ class ModelMenuButtonBase(QPushButton):
     def _set_button_text(self, model):
         if model is None:
             self.setText('None')
+            self.setToolTip(self.DEFAULT_TOOLTIP)
         else:
-            self.setText(f'#{model.id_string}')
+            import textwrap
+            self.setText(f'#{model.id_string}: {textwrap.shorten(model.name, 12)}')
+            self.setToolTip(f'<span>#{model.id_string}: {model.name}</span>')
 
 class AtomicStructureMenuButton(ModelMenuButtonBase):
+    DEFAULT_TOOLTIP='Atomic model to use for Q-score calculation.'
     def __init__(self, session, owner, *args, **kwargs):
         from chimerax.atomic import AtomicStructure
         super().__init__(session, owner, *args, 
                         model_type=AtomicStructure,
                         trigger_name='selected model changed', 
-                        tooltip='Atomic model to use for Q-score calculation.',
                         **kwargs)
         
     def _menu_entry_clicked(self, model=None):
@@ -575,12 +579,12 @@ class AtomicStructureMenuButton(ModelMenuButtonBase):
 
 
 class VolumeMenuButton(ModelMenuButtonBase):
+    DEFAULT_TOOLTIP='Volume to use for Q-score calculation.'
     def __init__(self, session, owner, *args, **kwargs):
         from chimerax.map import Volume
         super().__init__(session, owner, *args, 
                          model_type=Volume,
                          trigger_name='selected volume changed',
-                         tooltip='Volume to use for Q-score calculation.',
                          **kwargs)
     
     def _find_available_models(self):
@@ -637,7 +641,6 @@ class VolumeMenuButton(ModelMenuButtonBase):
         else:
             for v in free:
                 add_entry(v)
-            
             
 
 
