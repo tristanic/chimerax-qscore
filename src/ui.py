@@ -102,13 +102,17 @@ class QScoreWidget(QFrame):
         rb.clicked.connect(self.recalc)
         layout.addLayout(rbl)
 
-    def recalc(self, *_):
+    def recalc(self, *_, log_details=False, output_file=None):
         m, v = self.selected_model, self.selected_volume
         if m is None or v is None:
             from chimerax.core.errors import UserError
             raise UserError('Must select a model and map first!')
         from chimerax.core.commands import run
-        residue_map, (query_atoms, atom_scores) = run(self.session, f'qscore #{m.id_string} to #{v.id_string} useGui false', log=False)
+        if output_file is not None:
+            outputfile_text = f'outputFile {output_file}'
+        else:
+            outputfile_text = ''
+        residue_map, (query_atoms, atom_scores) = run(self.session, f'qscore #{m.id_string} to #{v.id_string} useGui false logDetails {log_details} {outputfile_text}', log=False)
         self._residue_map = residue_map
         self._atom_scores = atom_scores
         self._query_atoms = query_atoms

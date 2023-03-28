@@ -1,14 +1,15 @@
 # vim: set expandtab ts=4 sw=4:
 
 from chimerax.core.commands import (
-    CmdDesc, FloatArg, Bounded, IntArg, BoolArg
+    CmdDesc, FloatArg, Bounded, IntArg, BoolArg, FileNameArg
 )
 from chimerax.map import MapArg
 from chimerax.atomic import ResiduesArg
 
 
 def qscore(session, residues, to_volume=None, use_gui=True, reference_gaussian_sigma=0.6, points_per_shell=8, 
-            max_shell_radius=2.0, shell_radius_step=0.1, include_hydrogens=False, randomize_shell_points=True):
+            max_shell_radius=2.0, shell_radius_step=0.1, include_hydrogens=False, randomize_shell_points=True,
+            log_details=False, output_file=None):
     if to_volume is None:
         from chimerax.core.errors import UserError
         raise UserError("Must specify a map to compare the model to!")
@@ -29,7 +30,7 @@ def qscore(session, residues, to_volume=None, use_gui=True, reference_gaussian_s
                 raise UserError('All residues should come from a single model!')
             mw.selected_model = us[0]
             mw.selected_volume = to_volume
-            residue_map, (query_atoms, atom_scores) = mw.recalc()
+            residue_map, (query_atoms, atom_scores) = mw.recalc(log_details=log_details, output_file=output_file)
     else:
         from .qscore import q_score
         residue_map, (query_atoms, atom_scores) = q_score(residues, to_volume, ref_sigma=reference_gaussian_sigma,
@@ -38,7 +39,10 @@ def qscore(session, residues, to_volume=None, use_gui=True, reference_gaussian_s
                                         step=shell_radius_step,
                                         include_h=include_hydrogens, 
                                         randomize_shell_points=randomize_shell_points, 
-                                        logger=session.logger)
+                                        logger=session.logger,
+                                        log_details=log_details,
+                                        output_file=output_file
+                                        )
     if not use_gui:
         # The GUI itself runs this command with use_gui=False, so if we don't do this the result gets printed twice
         session.logger.info(f'Overall mean Q-Score: {atom_scores.mean():.2f}')
@@ -59,6 +63,8 @@ qscore_desc = CmdDesc(
         ("max_shell_radius", Bounded(FloatArg, min=0.6, max=2.5)),
         ("shell_radius_step", Bounded(FloatArg, min=0.05, max=0.5)),
         ("include_hydrogens", BoolArg),
-        ("randomize_shell_points", BoolArg)
+        ("randomize_shell_points", BoolArg),
+        ("log_details", BoolArg),
+        ("output_file", FileNameArg)
     ]
     )

@@ -21,7 +21,7 @@ RANDOM_SEED=1985
 def q_score(residues, volume, 
             ref_sigma=0.6, points_per_shell = 8, max_rad = 2.0, step=0.1, num_test_points=128, 
             clustering_iterations=5, include_h = False, debug = False, draw_points=False, 
-            logger=None, log_interval=1000, 
+            logger=None, log_interval=1000, log_details = False, output_file = None,
             randomize_shell_points=True, random_seed=RANDOM_SEED):
     '''
     Implementation of the map-model Q-score as described in Pintille et al. (2020): https://www.nature.com/articles/s41592-020-0731-1.
@@ -76,6 +76,7 @@ def q_score(residues, volume,
     - a numpy array with the Q-scores for all atoms in order of `residues.atoms` 
     '''
     from chimerax.geometry import find_close_points, find_closest_points, Places
+    from chimerax.atomic import Residues
     import numpy
     from math import floor
     if len(residues.unique_structures) != 1:
@@ -124,6 +125,7 @@ def q_score(residues, volume,
     query_coords = query_atoms.scene_coords
 
     r0_vals, oob = volume.interpolated_values(query_coords, out_of_bounds_list=True)
+    oob_residues = Residues()
     if len(oob):
         oob_residues = query_atoms[oob].unique_residues
         from chimerax.atomic import concise_residue_spec
@@ -242,7 +244,62 @@ def q_score(residues, volume,
         return_clipper_model_to_spotlight_mode(session, m)
     if logger is not None:
         logger.status('')
+    if log_details or output_file:
+        report_results(residue_scores, query_atoms, q_scores, oob_residues, log=log_details, filename=output_file)
     return residue_scores, (query_atoms, q_scores)
+
+def report_results(residue_map, query_atoms, atom_scores, out_of_bounds, log=False, filename=None):
+    log_sep = '\t'
+    file_sep = ','
+    from chimerax.atomic import Residues, concatenate
+    residues = concatenate([Residues(residue_map.keys()), out_of_bounds])
+    residues = Residues(sorted(residues, key=lambda r:(r.chain_id, r.number, r.insertion_code)))
+    logger = residues[0].session.logger
+    if filename is None:
+        out = None
+    else:
+        out = open(filename, 'wt')
+    if log:
+        sep=log_sep
+        header = f'<pre>Chain{sep}Number{sep}Name{sep}Qavg{sep}Qworst{sep}Qbb{sep}Qsc</pre>'
+        logger.info(header, is_html=True, add_newline=False)
+        logger.info(f'<pre>{"-"*(len(header.expandtabs())-10)}</pre>', is_html=True, add_newline=False)
+    if filename is not None:
+        sep = file_sep
+        print(f'Chain{sep}Number{sep}Name{sep}Qavg{sep}Qworst{sep}Qbackbone{sep}Qsidechain', file=out)
+    for r in residues:
+        scores = residue_map.get(r, None)
+        if scores is None:
+            if log:
+                sep = log_sep
+                logger.info(f'<pre>{r.chain_id}{sep}{r.number}{r.insertion_code}{sep}{r.name}{sep}"N/A"{sep}"N\A"{sep}"N/A"{sep}"N/A"</pre>', is_html=True, add_newline=False)
+            if filename is not None:
+                sep = file_sep
+                print(f'{r.chain_id}{sep}{r.number}{r.insertion_code}{sep}{r.name}{sep}"N/A"{sep}"N\A"{sep}"N/A"{sep}"N/A"', file=out)
+        qavg, qworst = scores
+        backbone_atoms = r.atoms[r.atoms.is_backbones()]
+        if len(backbone_atoms):
+            bi = query_atoms.indices(backbone_atoms)
+            qbackbone = f'{atom_scores[bi].mean():.3f}'
+        else:
+            qbackbone = 'N/A'
+        sidechain_atoms = r.atoms[r.atoms.is_side_onlys]
+        if len(sidechain_atoms):
+            si = query_atoms.indices(sidechain_atoms)
+            qsidechain = f'{atom_scores[si].mean():.3f}'
+        else:
+            qsidechain = 'N/A'
+
+        if log:
+            sep = log_sep
+            logger.info(f'<pre>{r.chain_id}{sep}{r.number}{r.insertion_code}{sep}{r.name}{sep}{qavg:.3f}{sep}{qworst:.3f}{sep}{qbackbone}{sep}{qsidechain}</pre>', is_html=True, add_newline=False)
+        if filename is not None:
+            sep = file_sep
+            print(f'{r.chain_id}{sep}{r.number}{r.insertion_code}{sep}{r.name}{sep}{qavg:.3f}{sep}{qworst:.3f}{sep}{qbackbone}{sep}{qsidechain}', file=out)
+    if out is not None:
+        out.close()
+    if log:
+        logger.info('')
 
 
 def test_q_score(session):
