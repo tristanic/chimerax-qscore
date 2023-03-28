@@ -2,10 +2,11 @@ from chimerax.ui.gui import MainToolWindow
 
 from Qt.QtWidgets import (
     QFrame, QLabel,
-    QPushButton, QMenu, QRadioButton,
+    QPushButton, QMenu, QRadioButton, QScrollBar,
     QHBoxLayout, QVBoxLayout,
 )
 from Qt import QtCore
+from Qt.QtCore import Qt
 
 class DefaultVLayout(QVBoxLayout):
     def __init__(self, *args, **kwargs):
@@ -267,9 +268,7 @@ class QScorePlot(QFrame):
 
         self.volume = None
 
-        sax = fig.add_axes([0.2, 0.1, 0.65, 0.03])
-        hpos = self._hpos_slider = Slider(sax, '', 0, 1, valinit=0)
-        hpos.valtext.set_visible(False)
+        fig.tight_layout(rect=(0,0.1,1,1))
 
         self.residues = []
         resnum = self.residue_numbers = numpy.zeros(2, dtype=numpy.int32)-1
@@ -301,9 +300,14 @@ class QScorePlot(QFrame):
         canvas.mpl_connect('scroll_event', self.zoom)
         canvas.mpl_connect('pick_event', self.on_pick)
 
-        hpos.on_changed(self._slider_update)
-
         ml.addWidget(canvas)
+
+        hpos = self._hpos_slider = QScrollBar(Qt.Orientation.Horizontal)
+        hpos.setRange(0,0)
+        ml.addWidget(hpos)
+
+        hpos.valueChanged.connect(self._slider_update)
+
         canvas.draw()
 
     def initialize_hover_text(self, target):
@@ -338,14 +342,9 @@ class QScorePlot(QFrame):
         if not len(self.residues) or self._slider_blocked:
             return
         axes = self.axes
-        hpos = self._hpos_slider
-        pos = val
         xmin, xmax = axes.get_xlim()
         xrange = xmax-xmin
-        resnum = self.residue_numbers
-        new_xmin = pos * (resnum.max()-xrange-resnum.min()) + resnum.min()
-
-        axes.set_xlim([new_xmin,new_xmin+xrange])
+        axes.set_xlim([val,val+xrange])
         self.canvas.draw_idle()
 
     def zoom(self, event=None):
@@ -381,14 +380,13 @@ class QScorePlot(QFrame):
             new_xmin = max(resnum.min(), xmin)
         new_xmax = min(max(resnum), new_xmin+xrange)
         axes.set_xlim([new_xmin, new_xmax])
-        self._slider_blocked = True
         if xrange >= resnum.max()-resnum.min():
-            hpos.set_active(False)
-            hpos.set_val(0)
+            hpos.setRange(resnum.min(), resnum.min())
         else:
-            hpos.set_active(True)
-            hpos.set_val((new_xmin-resnum.min())/((resnum.max()-xrange)-resnum.min()))
-        self._slider_blocked = False
+            with slot_disconnected(hpos.valueChanged, self._slider_update):
+                hpos.setRange(resnum.min(), resnum.max()-xrange)
+                hpos.setValue(xmin)
+        self.canvas.draw_idle()
 
     def zoom_extents(self):
         resnum = self.residue_numbers
@@ -644,7 +642,26 @@ class VolumeMenuButton(ModelMenuButtonBase):
             
 
 
-
         
 
+from contextlib import contextmanager
+@contextmanager
+def slot_disconnected(signal, slot):
+    '''
+    Temporarily disconnect a slot from a signal using
 
+    .. code-block:: python
+    
+        with slot_disconnected(signal, slot):
+            do_something()
+    
+    The signal is guaranteed to be reconnected even if do_something() throws an error.
+    '''
+    try:
+        # disconnect() throws a TypeError if the method is not connected
+        signal.disconnect(slot)
+        yield
+    except TypeError:
+        pass
+    finally:
+        signal.connect(slot)
