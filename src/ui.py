@@ -253,7 +253,7 @@ class QScorePlot(QFrame):
         from matplotlib.widgets import Slider
         from matplotlib.colors import Normalize
         import numpy
-
+        self.setMinimumHeight(150)
         self._slider_blocked = False
         ml = self.main_layout = DefaultVLayout()
         self.setLayout(ml)
