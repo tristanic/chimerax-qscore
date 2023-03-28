@@ -128,6 +128,12 @@ class QScoreWidget(QFrame):
         if self._selected_model != model:
             self.clear_scores()
         self._selected_model = model
+        if model is not None:
+            from .clipper_compat import model_managed_by_clipper
+            if not model_managed_by_clipper(model):
+                session = model.session
+                from chimerax.core.commands import run
+                run(session, f'style #{model.id_string} stick; color #{model.id_string} byhet')
         self.triggers.activate_trigger('selected model changed', model)
     
     @property
@@ -427,7 +433,7 @@ class QScorePlot(QFrame):
             residues = Residues(neighbors)
             argspec = concise_residue_spec(session, residues)
             run(session, f'surf zone #{self.volume.id_string} near {argspec} dist 3', log=False)
-            run(session, f'~cartoon #{m.id_string}; hide #{m.id_string}; show {argspec}; cartoon {argspec}', log=False)
+            run(session, f'~cartoon #{m.id_string}; hide #{m.id_string}; show {argspec}; cartoon {argspec}&~{atomspec}', log=False)
             run(session, f'view {atomspec}', log=False)            
 
     def update_data(self, residues, scores, volume):
