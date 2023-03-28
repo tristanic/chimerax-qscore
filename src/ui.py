@@ -71,6 +71,11 @@ class QScoreWidget(QFrame):
         bl.addWidget(QLabel('Atomic model: '))
         asb = AtomicStructureMenuButton(session, self)
         bl.addWidget(asb)
+        bl.addWidget(QLabel('Chain: '))
+        cb = self.chain_button = ChainChooserButton()
+        self.triggers.add_handler('selected model changed', cb._selected_model_changed_cb)
+        cb.triggers.add_handler('selected chain changed', self.update_plot)
+        bl.addWidget(cb)
         bl.addStretch()
         bl.addWidget(QLabel('Map: '))
         vb = VolumeMenuButton(session, self)
@@ -86,18 +91,13 @@ class QScoreWidget(QFrame):
         pw.initialize_hover_text(ptt)
 
         rbl = DefaultHLayout()
-        rb = self.recalc_button = QPushButton('Recalculate')
+        rb = self.recalc_button = QPushButton('Calculate')
         rbl.addWidget(rb)
         ms = self.mode_selector = AverageModeChooser()
         rbl.addWidget(ms)
         ms.triggers.add_handler('mode changed', self.update_plot)
         rbl.addStretch()
-        rbl.addWidget(QLabel('Chain: '))
-        cb = self.chain_button = ChainChooserButton()
-        self.triggers.add_handler('selected model changed', cb._selected_model_changed_cb)
-        cb.triggers.add_handler('selected chain changed', self.update_plot)
-        rbl.addWidget(cb)
-
+    
         def _recalc(*_):
             m, v = self.selected_model, self.selected_volume
             if m is None or v is None:
