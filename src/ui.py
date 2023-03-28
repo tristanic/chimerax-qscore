@@ -99,19 +99,21 @@ class QScoreWidget(QFrame):
         ms.triggers.add_handler('mode changed', self.update_plot)
         rbl.addStretch()
     
-        def _recalc(*_):
-            m, v = self.selected_model, self.selected_volume
-            if m is None or v is None:
-                from chimerax.core.errors import UserError
-                raise UserError('Must select a model and map first!')
-            from chimerax.core.commands import run
-            residue_map, (query_atoms, atom_scores) = run(session, f'qscore #{m.id_string} to #{v.id_string}')
-            self._residue_map = residue_map
-            self._atom_scores = atom_scores
-            self._query_atoms = query_atoms
-            self.update_plot()
-        rb.clicked.connect(_recalc)
+        rb.clicked.connect(self.recalc)
         layout.addLayout(rbl)
+
+    def recalc(self, *_):
+        m, v = self.selected_model, self.selected_volume
+        if m is None or v is None:
+            from chimerax.core.errors import UserError
+            raise UserError('Must select a model and map first!')
+        from chimerax.core.commands import run
+        residue_map, (query_atoms, atom_scores) = run(self.session, f'qscore #{m.id_string} to #{v.id_string} useGui false', log=False)
+        self._residue_map = residue_map
+        self._atom_scores = atom_scores
+        self._query_atoms = query_atoms
+        self.update_plot()
+        return residue_map, (query_atoms, atom_scores)
 
     def _models_removed_cb(self, trigger_name, removed):
         if self.selected_model in removed:
@@ -127,13 +129,13 @@ class QScoreWidget(QFrame):
     def selected_model(self, model):
         if self._selected_model != model:
             self.clear_scores()
-        self._selected_model = model
-        if model is not None:
+        if model is not None and model != self._selected_model:
             from .clipper_compat import model_managed_by_clipper
             if not model_managed_by_clipper(model):
                 session = model.session
                 from chimerax.core.commands import run
                 run(session, f'style #{model.id_string} stick; color #{model.id_string} byhet')
+        self._selected_model = model
         self.triggers.activate_trigger('selected model changed', model)
     
     @property
