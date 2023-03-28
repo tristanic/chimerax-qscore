@@ -49,6 +49,10 @@ max-session-version = 1
 categories = ["General"]
 classifiers = ["Development Status :: 2 - Pre-Alpha"]
 
+
+[chimerax.package-data]
+"src/" = ["docs/**"]
+
 [chimerax.command.qscore]
 category = "Validation"
 description = "Model-map Q-Score"
