@@ -62,8 +62,6 @@ qscore_desc = CmdDesc(
         ("points_per_shell", Bounded(IntArg, min=1)),
         ("max_shell_radius", Bounded(FloatArg, min=0.6, max=2.5)),
         ("shell_radius_step", Bounded(FloatArg, min=0.05, max=0.5)),
-        ("include_hydrogens", BoolArg),
-        ("randomize_shell_points", BoolArg),
         ("log_details", BoolArg),
         ("output_file", FileNameArg)
     ]
