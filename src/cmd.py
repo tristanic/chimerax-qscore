@@ -30,7 +30,12 @@ def qscore(session, residues, to_volume=None, use_gui=True, reference_gaussian_s
                 raise UserError('All residues should come from a single model!')
             mw.selected_model = us[0]
             mw.selected_volume = to_volume
-            residue_map, (query_atoms, atom_scores) = mw.recalc(log_details=log_details, output_file=output_file)
+            mw.reference_sigma = reference_gaussian_sigma
+            mw.points_per_shell = points_per_shell
+            mw.max_shell_radius = max_shell_radius
+            mw.shell_radius_step = shell_radius_step
+            mw.log_details = log_details
+            residue_map, (query_atoms, atom_scores) = mw.recalc(log_details=log_details, output_file=output_file, echo_command=False)
     else:
         from .qscore import q_score
         residue_map, (query_atoms, atom_scores) = q_score(residues, to_volume, ref_sigma=reference_gaussian_sigma,
@@ -58,10 +63,10 @@ qscore_desc = CmdDesc(
     keyword=[
         ("to_volume", MapArg),
         ("use_gui", BoolArg),
-        ("reference_gaussian_sigma", Bounded(FloatArg, min=0.01)),
-        ("points_per_shell", Bounded(IntArg, min=1)),
-        ("max_shell_radius", Bounded(FloatArg, min=0.6, max=2.5)),
-        ("shell_radius_step", Bounded(FloatArg, min=0.05, max=0.5)),
+        ("reference_gaussian_sigma", Bounded(FloatArg, min=0.1, max=2.0)),
+        ("points_per_shell", Bounded(IntArg, min=2, max=32)),
+        ("max_shell_radius", Bounded(FloatArg, min=0.5, max=2.5)),
+        ("shell_radius_step", Bounded(FloatArg, min=0.025, max=0.5)),
         ("log_details", BoolArg),
         ("output_file", FileNameArg)
     ]

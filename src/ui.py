@@ -3,7 +3,8 @@ from chimerax.ui.gui import MainToolWindow
 from Qt.QtWidgets import (
     QFrame, QLabel,
     QPushButton, QMenu, QRadioButton, QScrollBar,
-    QHBoxLayout, QVBoxLayout,
+    QSpinBox, QDoubleSpinBox, QCheckBox,
+    QHBoxLayout, QVBoxLayout, QGridLayout
 )
 from Qt import QtCore
 from Qt.QtCore import Qt
@@ -94,6 +95,7 @@ class QScoreWidget(QFrame):
         rbl = DefaultHLayout()
         rb = self.recalc_button = QPushButton('Calculate')
         rbl.addWidget(rb)
+        rbl.addWidget(QLabel('Display: '))
         ms = self.mode_selector = AverageModeChooser()
         rbl.addWidget(ms)
         ms.triggers.add_handler('mode changed', self.update_plot)
@@ -102,7 +104,113 @@ class QScoreWidget(QFrame):
         rb.clicked.connect(self.recalc)
         layout.addLayout(rbl)
 
-    def recalc(self, *_, log_details=False, output_file=None):
+        bl = DefaultVLayout()
+        bl.addWidget(QLabel('ADVANCED SETTINGS'))
+        bhl = QGridLayout()
+        
+        tt = '<span>For each atom, the algorithm will try to find this number of points in each radial shell closer to that atom than any other.</span>'
+        l = QLabel('Points per shell: ')
+        l.setToolTip(tt)
+        bhl.addWidget(l, 0, 0)
+        ppssb = self._points_per_shell_spin_box = DefaultValueSpinBox(8)
+        ppssb.setToolTip(tt)
+        bhl.addWidget(ppssb, 0, 1)
+        ppssb.setMinimum(2)
+        ppssb.setMaximum(32)
+        ppssb.setSingleStep(2)
+
+        tt = '<span>The largest shell around each atom will be the biggest multiple of "Shell radius step" smaller than this value.</span>'
+        l = QLabel('Max shell radius: ')
+        l.setToolTip(tt)
+        bhl.addWidget(l, 0, 2)
+        msrsb = self._max_shell_radius_spin_box = DefaultValueDoubleSpinBox(2.0)
+        msrsb.setToolTip(tt)
+        bhl.addWidget(msrsb, 0, 3)
+        msrsb.setMinimum(0.5)
+        msrsb.setMaximum(2.5)
+        msrsb.setSingleStep(0.1)
+
+        tt = '<span>Spherical shells of test points will be created at all multiples of this radius up to "Max shell radius".</span>'
+        l = QLabel('Shell radius step: ')
+        l.setToolTip(tt)
+        bhl.addWidget(l, 0, 4)
+        srssb = self._shell_radius_step_spin_box = DefaultValueDoubleSpinBox(0.1)
+        srssb.setToolTip(tt)
+        bhl.addWidget(srssb, 0, 5)
+        srssb.setMinimum(0.025)
+        srssb.setMaximum(0.5)
+        srssb.setSingleStep(0.025)
+        srssb.setDecimals(3)
+
+        tt = '<span>The standard deviation of the Gaussian function used as a reference. This can be thought of as about half the resolution of an "ideal" map.</span>'
+        l = QLabel('Reference sigma: ')
+        l.setToolTip(tt)
+        bhl.addWidget(l, 1, 0)
+        rssb = self._ref_sigma_spin_box = DefaultValueDoubleSpinBox(0.6)
+        rssb.setToolTip(tt)
+        bhl.addWidget(rssb, 1, 1)
+        rssb.setMinimum(0.1)
+        rssb.setMaximum(2)
+        rssb.setSingleStep(0.05)
+
+        ldcb = self._log_details_checkbox = QCheckBox('Log details')
+        ldcb.setToolTip('<span>If checked, a residue-by-residue summary of scores will be printed to the ChimeraX log (this can be quite voluminous).</span>')
+        ldcb.setChecked(False)
+
+        bhl.addWidget(ldcb, 1, 2)
+
+        bl.addLayout(bhl)
+        layout.addLayout(bl)
+    
+
+    @property
+    def points_per_shell(self):
+        return self._points_per_shell_spin_box.value()
+
+    @points_per_shell.setter
+    def points_per_shell(self, value):
+        self._points_per_shell_spin_box.setValue(value)
+    
+    @property
+    def max_shell_radius(self):
+        return self._max_shell_radius_spin_box.value()
+    
+    @max_shell_radius.setter
+    def max_shell_radius(self, value):
+        self._max_shell_radius_spin_box.setValue(value)
+    
+    @property
+    def shell_radius_step(self):
+        return self._shell_radius_step_spin_box.value()
+    
+    @shell_radius_step.setter
+    def shell_radius_step(self, value):
+        self._shell_radius_step_spin_box.setValue(value)
+    
+    @property
+    def reference_sigma(self):
+        return self._ref_sigma_spin_box.value()
+
+    @reference_sigma.setter
+    def reference_sigma(self, value):
+        self._ref_sigma_spin_box.setValue(value)
+    
+    @property
+    def log_details(self):
+        return self._log_details_checkbox.isChecked()
+    
+    @log_details.setter
+    def log_details(self, flag):
+        self._log_details_checkbox.setChecked(flag)
+    
+
+
+
+
+
+    def recalc(self, *_, log_details=None, output_file=None, echo_command=True):
+        if log_details is None:
+            log_details = self.log_details
         m, v = self.selected_model, self.selected_volume
         if m is None or v is None:
             from chimerax.core.errors import UserError
@@ -112,7 +220,7 @@ class QScoreWidget(QFrame):
             outputfile_text = f'outputFile {output_file}'
         else:
             outputfile_text = ''
-        residue_map, (query_atoms, atom_scores) = run(self.session, f'qscore #{m.id_string} to #{v.id_string} useGui false logDetails {log_details} {outputfile_text}', log=False)
+        residue_map, (query_atoms, atom_scores) = run(self.session, f'qscore #{m.id_string} to #{v.id_string} useGui false pointsPerShell {self.points_per_shell} shellRadiusStep {self.shell_radius_step:.3f} maxShellRadius {self.max_shell_radius:.2f} referenceGaussianSigma {self.reference_sigma:.2f} logDetails {log_details} {outputfile_text}', log=echo_command)
         self._residue_map = residue_map
         self._atom_scores = atom_scores
         self._query_atoms = query_atoms
@@ -652,7 +760,69 @@ class VolumeMenuButton(ModelMenuButtonBase):
             for v in free:
                 add_entry(v)
             
+class DefaultValueSpinBoxBase(QFrame):
+    BOX_CLASS=None
 
+    def __init__(self, default_value, *args, **kwargs):
+        if self.BOX_CLASS is None:
+            raise RuntimeError('Cannot instantiate base class!')
+        super().__init__(*args, **kwargs)
+        layout = DefaultHLayout()
+        self.setLayout(layout)
+        self.default_value = default_value
+        sb = self.spin_box = self.BOX_CLASS()
+        sb.setValue(default_value)
+        layout.addWidget(sb)
+        rb = self.reset_button = QPushButton('↺')
+        rb.setToolTip('Reset to default value')
+        layout.addWidget(sb)
+        rb.clicked.connect(self.reset)
+        rb.setMaximumWidth(15)
+        layout.addWidget(rb)
+        sb.valueChanged.connect(self._value_changed_cb)
+
+    def reset(self):
+        self.spin_box.setValue(self.default_value)
+    
+    def value(self):
+        return self.spin_box.value()
+
+    def setValue(self, value):
+        self.spin_box.setValue(value)
+    
+    def setSingleStep(self, step):
+        self.spin_box.setSingleStep(step)
+    
+    def singleStep(self):
+        return self.spin_box.singleStep()
+
+    def maximum(self):
+        return self.spin_box.maximum()
+    
+    def setMaximum(self, value):
+        self.spin_box.setMaximum(value)
+    
+    def minimum(self):
+        return self.spin_box.minimum()
+    
+    def setMinimum(self, value):
+        self.spin_box.setMinimum(value)
+
+    def _value_changed_cb(self, value):
+        if value != self.default_value:
+            self.setStyleSheet('background-color: rgb(0,200,200);')
+        else:
+            self.setStyleSheet('')
+
+
+class DefaultValueSpinBox(DefaultValueSpinBoxBase):
+    BOX_CLASS=QSpinBox
+
+class DefaultValueDoubleSpinBox(DefaultValueSpinBoxBase):
+    BOX_CLASS=QDoubleSpinBox
+
+    def setDecimals(self, value):
+        self.spin_box.setDecimals(value)
 
         
 
