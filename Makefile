@@ -106,3 +106,5 @@ generated_files:
 
 clean_generated_files:
 	# Remove generated files
+
+.PHONY: docs
