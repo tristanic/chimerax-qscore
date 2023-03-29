@@ -29,11 +29,11 @@ def ensure_clipper_map_covers_selection(session, m, residues, v):
         if was_in_spotlight_mode:
             from chimerax.core.commands import run
             from chimerax.atomic import concise_residue_spec
-            run(session, f'clipper isolate {concise_residue_spec(session, residues)} focus false')
+            run(session, f'clipper isolate {concise_residue_spec(session, residues)} focus false', log=False)
         return was_in_spotlight_mode
     return False
 
 def return_clipper_model_to_spotlight_mode(session, m):
     if model_managed_by_clipper(m):
         from chimerax.core.commands import run
-        run(session, f'clipper spotlight #{m.id_string}')
+        run(session, f'clipper spotlight #{m.id_string}', log=False)
