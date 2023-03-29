@@ -16,9 +16,67 @@ _numpy_print_options = {
     'suppress':True
     }
 
+RANDOM_SEED=1985
 
-def q_score(residues, volume, ref_sigma=0.6, points_per_shell = 8, max_rad = 2.0, step=0.1, num_test_points=128, clustering_iterations=5, include_h = False, debug = False, draw_points=False, logger=None, log_interval=1000, deterministic=True):
+def q_score(residues, volume, 
+            ref_sigma=0.6, points_per_shell = 8, max_rad = 2.0, step=0.1, num_test_points=128, 
+            clustering_iterations=5, include_h = False, debug = False, draw_points=False, 
+            logger=None, log_interval=1000, log_details = False, output_file = None,
+            randomize_shell_points=True, random_seed=RANDOM_SEED):
+    '''
+    Implementation of the map-model Q-score as described in Pintille et al. (2020): https://www.nature.com/articles/s41592-020-0731-1.
+
+    If the model is well-fitted to the map, the Q-score is essentially an atom-by-atom estimate of "resolvability"
+    (i.e. how much the map tells us about the true position of the atom). If the model is *not* well-fitted, then 
+    low Q-scores are good pointers to possible problem regions. In practice, of course, usually we have a mixture of 
+    both situations.
+
+    This version of the algorithm has a few minor modifications compared to the original implementation aimed at 
+    improving overall speed. As a result the scores it returns are not identical to the original, typically differing by 
+    +/- 0.04 in individual atom scores and +/- 0.02 in residue averages. This difference can be explained by the different 
+    choice of test points, and reflects the underlying sampling uncertainty in the method. 
+    
+    This implementation works as follows:
+
+    - For each atom, define a set of shells in steps of `step` angstroms out to `max_rad` angstroms.
+    - For each shell, try to find at least `points_per_shell` probe points closer to the test atom than 
+      any other atom:
+
+      - For radii smaller than about half a bond length, first try a set of `points_per_shell`
+        points evenly spread around the spherical surface. 
+      - For larger radii (or if this quick approach fails to find enough points on smaller radii), 
+        start with `num_test_points` evenly spread on the sphere surface, remove points closer to other atoms 
+        than the test atom. If more than `points_per_shell` points remain, perform up to `clustering_iterations`
+        rounds of k-means clustering to find `points_per_shell` clusters, and choose the point nearest to the 
+        centroid of each cluster. If <= `points_per_shell` points remain, just do the best with what we have.
+        By default, the "seed" centroids for each cluster are chosen pseudo-randomly from the input points.
+        Using the same `random_seed` will give the same result each time; varying `random_seed` over multiple 
+        runs can be used to give an idea of the underlying uncertainty in the algorithm. If `randomize_shell_points`
+        is False, the seed centroids will instead be the closest point (in spherical coordinates) to each of 
+        `points_per_shell` evenly-spaced points on a unit sphere. While this may intuitively seem preferable,
+        in practice for tightly-packed atoms it leads to oversampling of the "junctions" with other atoms, and 
+        undersampling of the unhindered space. 
+
+    - Interpolate the local density value at each shell point (including at the centre of the atom itself),
+      and calculate the Q-score as the normalised-about-the-mean cross-correlation between the measured values 
+      and an ideal Gaussian with `ref_sigma` fall-off (the default of 0.6 corresponds to approximately the 
+      expected fall-off in a 1.3 Angstrom map).
+
+    On a typical machine, run time is on the order of 1 ms/atom (i.e. from 10s to a few minutes for typical 
+    cryo-EM models). If the ChimeraX logger (`session.logger`) is passed in as the `logger` argument, the approximate
+    remaining time will be printed to the status bar every `log_interval` atoms.
+
+    The `debug` and `draw_points` arguments are meant primarily for debugging, and should only be used for 
+    small selections at a time (`debug` is *very*  verbose, and `draw_points` leads to the drawing of approx.
+    `max_rad`/`step`*`points_per_shell` ~ 160 points per atom).
+
+    Returns:
+
+    - a {Residue: (mean_q_score, worst_atom_score)} dict
+    - a numpy array with the Q-scores for all atoms in order of `residues.atoms` 
+    '''
     from chimerax.geometry import find_close_points, find_closest_points, Places
+    from chimerax.atomic import Residues
     import numpy
     from math import floor
     if len(residues.unique_structures) != 1:
@@ -26,9 +84,9 @@ def q_score(residues, volume, ref_sigma=0.6, points_per_shell = 8, max_rad = 2.0
         raise UserError('All residues must be from the same model!')
     m = residues.unique_structures[0]
     session = residues.unique_structures[0].session
-    from .clipper_compat import ensure_clipper_map_covers_selection
-    ensure_clipper_map_covers_selection(session, m, residues, volume)
-    from ._kmeans import spherical_k_means
+    from .clipper_compat import ensure_clipper_map_covers_selection, return_clipper_model_to_spotlight_mode
+    was_spotlight = ensure_clipper_map_covers_selection(session, m, residues, volume)
+    from . import _kmeans
     matrix, xform = volume.matrix_and_transform(None, 'all', (1,1,1))
     from chimerax.map_data import interpolate_volume_data
     min_d, max_d = min_max_d(volume)
@@ -55,7 +113,7 @@ def q_score(residues, volume, ref_sigma=0.6, points_per_shell = 8, max_rad = 2.0
         from chimerax.core.colors import random_colors
         d = Drawing('shell points')
         v, n, t = sphere_geometry2(24)
-        v *= (step*0.25)
+        v *= (0.05)
         d.set_geometry(v, n, t)
         dm = Model('shell points', session)
         dm.add_drawing(d)
@@ -67,6 +125,7 @@ def q_score(residues, volume, ref_sigma=0.6, points_per_shell = 8, max_rad = 2.0
     query_coords = query_atoms.scene_coords
 
     r0_vals, oob = volume.interpolated_values(query_coords, out_of_bounds_list=True)
+    oob_residues = Residues()
     if len(oob):
         oob_residues = query_atoms[oob].unique_residues
         from chimerax.atomic import concise_residue_spec
@@ -133,10 +192,10 @@ def q_score(residues, volume, ref_sigma=0.6, points_per_shell = 8, max_rad = 2.0
                 local_d_vals[j] = d_vals
             else:
                 points = local_sphere[candidates]
-                if deterministic:
-                    labels, closest = spherical_k_means(points, a_coord, points_per_shell, clustering_iterations, local_pps)
+                if not randomize_shell_points:
+                    labels, closest = _kmeans.spherical_k_means_defined(points, a_coord, points_per_shell, local_pps, clustering_iterations)
                 else:
-                    labels, closest = spherical_k_means(points, a_coord, points_per_shell, clustering_iterations)
+                    labels, closest = _kmeans.spherical_k_means_random(points, a_coord, points_per_shell, clustering_iterations, random_seed+j)
                 if debug:
                     with numpy.printoptions(**_numpy_print_options):
                         print(f'Points: {points}')
@@ -180,10 +239,67 @@ def q_score(residues, volume, ref_sigma=0.6, points_per_shell = 8, max_rad = 2.0
         if len(indices) > 0:
             rscores = q_scores[indices]
             residue_scores[r] = (rscores.mean(), rscores.min())
-
+    
+    if was_spotlight:
+        return_clipper_model_to_spotlight_mode(session, m)
     if logger is not None:
         logger.status('')
-    return residue_scores, q_scores
+    if log_details or output_file:
+        report_results(residue_scores, query_atoms, q_scores, oob_residues, log=log_details, filename=output_file)
+    return residue_scores, (query_atoms, q_scores)
+
+def report_results(residue_map, query_atoms, atom_scores, out_of_bounds, log=False, filename=None):
+    log_sep = '\t'
+    file_sep = ','
+    from chimerax.atomic import Residues, concatenate
+    residues = concatenate([Residues(residue_map.keys()), out_of_bounds])
+    residues = Residues(sorted(residues, key=lambda r:(r.chain_id, r.number, r.insertion_code)))
+    logger = residues[0].session.logger
+    if filename is None:
+        out = None
+    else:
+        out = open(filename, 'wt')
+    if log:
+        sep=log_sep
+        header = f'<pre>Chain{sep}Number{sep}Name{sep}Qavg{sep}Qworst{sep}Qbb{sep}Qsc</pre>'
+        logger.info(header, is_html=True, add_newline=False)
+        logger.info(f'<pre>{"-"*(len(header.expandtabs())-10)}</pre>', is_html=True, add_newline=False)
+    if filename is not None:
+        sep = file_sep
+        print(f'Chain{sep}Number{sep}Name{sep}Qavg{sep}Qworst{sep}Qbackbone{sep}Qsidechain', file=out)
+    for r in residues:
+        scores = residue_map.get(r, None)
+        if scores is None:
+            if log:
+                sep = log_sep
+                logger.info(f'<pre>{r.chain_id}{sep}{r.number}{r.insertion_code}{sep}{r.name}{sep}"N/A"{sep}"N\A"{sep}"N/A"{sep}"N/A"</pre>', is_html=True, add_newline=False)
+            if filename is not None:
+                sep = file_sep
+                print(f'{r.chain_id}{sep}{r.number}{r.insertion_code}{sep}{r.name}{sep}"N/A"{sep}"N\A"{sep}"N/A"{sep}"N/A"', file=out)
+        qavg, qworst = scores
+        backbone_atoms = r.atoms[r.atoms.is_backbones()]
+        if len(backbone_atoms):
+            bi = query_atoms.indices(backbone_atoms)
+            qbackbone = f'{atom_scores[bi].mean():.3f}'
+        else:
+            qbackbone = 'N/A'
+        sidechain_atoms = r.atoms[r.atoms.is_side_onlys]
+        if len(sidechain_atoms):
+            si = query_atoms.indices(sidechain_atoms)
+            qsidechain = f'{atom_scores[si].mean():.3f}'
+        else:
+            qsidechain = 'N/A'
+
+        if log:
+            sep = log_sep
+            logger.info(f'<pre>{r.chain_id}{sep}{r.number}{r.insertion_code}{sep}{r.name}{sep}{qavg:.3f}{sep}{qworst:.3f}{sep}{qbackbone}{sep}{qsidechain}</pre>', is_html=True, add_newline=False)
+        if filename is not None:
+            sep = file_sep
+            print(f'{r.chain_id}{sep}{r.number}{r.insertion_code}{sep}{r.name}{sep}{qavg:.3f}{sep}{qworst:.3f}{sep}{qbackbone}{sep}{qsidechain}', file=out)
+    if out is not None:
+        out.close()
+    if log:
+        logger.info('')
 
 
 def test_q_score(session):

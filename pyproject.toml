@@ -15,7 +15,7 @@ license = { text = "MIT" }
 authors= [{name = "Tristan Croll", email="tcroll@altoslabs.com"}]
 description = "Q-Score for validation of local model-map fit"
 dependencies = [
-	"ChimeraX-Core >=0.1"
+	"ChimeraX-Core >=1.5"
 ]
 dynamic = ["classifiers", "requires-python", "version"]
 
@@ -48,6 +48,10 @@ min-session-version = 1
 max-session-version = 1
 categories = ["General"]
 classifiers = ["Development Status :: 2 - Pre-Alpha"]
+
+
+[chimerax.package-data]
+"src/" = ["docs/**"]
 
 [chimerax.command.qscore]
 category = "Validation"
