@@ -1,10 +1,11 @@
 from chimerax.ui.gui import MainToolWindow
 
 from Qt.QtWidgets import (
-    QFrame, QLabel,
-    QPushButton, QMenu, QRadioButton, QScrollBar,
+    QFrame, QLabel, 
+    QPushButton, QToolButton, QMenu, QRadioButton, QScrollBar,
     QSpinBox, QDoubleSpinBox, QCheckBox,
-    QHBoxLayout, QVBoxLayout, QGridLayout
+    QHBoxLayout, QVBoxLayout, QGridLayout, 
+    QSizePolicy
 )
 from Qt import QtCore
 from Qt.QtCore import Qt
@@ -106,6 +107,8 @@ class QScoreWidget(QFrame):
 
         bl = DefaultVLayout()
         bl.addWidget(QLabel('ADVANCED SETTINGS'))
+        bl1 = DefaultHLayout()
+        bl.addLayout(bl1)
         bhl = QGridLayout()
         
         tt = '<span>For each atom, the algorithm will try to find this number of points in each radial shell closer to that atom than any other.</span>'
@@ -159,7 +162,8 @@ class QScoreWidget(QFrame):
 
         bhl.addWidget(ldcb, 1, 2)
 
-        bl.addLayout(bhl)
+        bl1.addLayout(bhl)
+        bl1.addStretch()
         layout.addLayout(bl)
     
 
@@ -773,12 +777,15 @@ class DefaultValueSpinBoxBase(QFrame):
         sb = self.spin_box = self.BOX_CLASS()
         sb.setValue(default_value)
         layout.addWidget(sb)
-        rb = self.reset_button = QPushButton('↺')
+        rb = self.reset_button = QToolButton()
+        rb.setText('↺')
+        rb.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         rb.setToolTip('Reset to default value')
         layout.addWidget(sb)
         rb.clicked.connect(self.reset)
-        rb.setMaximumWidth(15)
         layout.addWidget(rb)
+        rb.setMinimumWidth(20)
+        rb.adjustSize()
         sb.valueChanged.connect(self._value_changed_cb)
 
     def reset(self):
