@@ -1,11 +1,14 @@
 from chimerax.ui.gui import MainToolWindow
+# Pro tip: https://www.cgl.ucsf.edu/chimerax/docs/devel/tutorials/introduction.html#pro-tip
+from chimerax.core.commands import run as run_chimerax_command
+from chimerax.core.errors import UserError
 
 from Qt.QtWidgets import (
     QFrame, QLabel, 
     QPushButton, QToolButton, QMenu, QRadioButton, QScrollBar,
     QSpinBox, QDoubleSpinBox, QCheckBox,
     QHBoxLayout, QVBoxLayout, QGridLayout, 
-    QSizePolicy
+    QSizePolicy, QFileDialog
 )
 from Qt import QtCore
 from Qt.QtCore import Qt
@@ -167,6 +170,11 @@ class QScoreWidget(QFrame):
         aacb.setChecked(False)
         bhl.addWidget(aacb, 1, 3)
 
+        # a button to save the attribute assignment file (https://www.cgl.ucsf.edu/chimerax/docs/user/formats/defattr.html#examples)
+        safb = QPushButton('Save attrs.')
+        safb.setToolTip('<span>Save calculated Q-scores as ChimeraX attribute assignment file</span>')
+        safb.clicked.connect(self.save_attr_assignment_file)
+        bhl.addWidget(safb, 1,4)
 
         bl1.addLayout(bhl)
         bl1.addStretch()
@@ -227,14 +235,13 @@ class QScoreWidget(QFrame):
             log_details = self.log_details
         m, v = self.selected_model, self.selected_volume
         if m is None or v is None:
-            from chimerax.core.errors import UserError
             raise UserError('Must select a model and map first!')
-        from chimerax.core.commands import run
+        #from chimerax.core.commands import run
         if output_file is not None:
             outputfile_text = f'outputFile {output_file}'
         else:
             outputfile_text = ''
-        residue_map, (query_atoms, atom_scores) = run(self.session, f'qscore #{m.id_string} to #{v.id_string} useGui false pointsPerShell {self.points_per_shell} shellRadiusStep {self.shell_radius_step:.3f} maxShellRadius {self.max_shell_radius:.2f} referenceGaussianSigma {self.reference_sigma:.2f} logDetails {log_details} {outputfile_text} assignAttr {self.assign_attr}', log=echo_command)
+        residue_map, (query_atoms, atom_scores) = run_chimerax_command(self.session, f'qscore #{m.id_string} to #{v.id_string} useGui false pointsPerShell {self.points_per_shell} shellRadiusStep {self.shell_radius_step:.3f} maxShellRadius {self.max_shell_radius:.2f} referenceGaussianSigma {self.reference_sigma:.2f} logDetails {log_details} {outputfile_text} assignAttr {self.assign_attr}', log=echo_command)
         self._residue_map = residue_map
         self._atom_scores = atom_scores
         self._query_atoms = query_atoms
@@ -259,8 +266,8 @@ class QScoreWidget(QFrame):
             from .clipper_compat import model_managed_by_clipper
             if not model_managed_by_clipper(model):
                 session = model.session
-                from chimerax.core.commands import run
-                run(session, f'style #{model.id_string} stick; color #{model.id_string} byhet')
+                #from chimerax.core.commands import run
+                run_chimerax_command(session, f'style #{model.id_string} stick; color #{model.id_string} byhet')
         self._selected_model = model
         self.triggers.activate_trigger('selected model changed', model)
     
@@ -277,8 +284,8 @@ class QScoreWidget(QFrame):
             from .clipper_compat import map_associated_with_model
             if not map_associated_with_model(self.selected_model, v):
                 if any([s.display_style=='solid' for s in v.surfaces]):
-                    from chimerax.core.commands import run
-                    run (self.session, f'transparency #{v.id_string} 60')
+                    #from chimerax.core.commands import run
+                    run_chimerax_command(self.session, f'transparency #{v.id_string} 60')
         self.triggers.activate_trigger('selected volume changed', v)
 
     def clear_scores(self):
@@ -286,6 +293,23 @@ class QScoreWidget(QFrame):
             self._atom_scores = None
             self.update_plot()
 
+
+    def save_attr_assignment_file(self):
+        '''
+        If Q-scores were saved as a ChimeraX attribute, they can be exported to a tab-separated file
+        
+        For file specification see:
+        
+        https://www.cgl.ucsf.edu/chimerax/docs/user/formats/defattr.html#examples
+        '''
+        # check if there is an active model in the UI
+        if self._selected_model is None:
+            raise UserError('No model is currently selected!')
+        # ask for file path
+        filename = QFileDialog.getSaveFileName(self, 'Save attribute assignment file...', '.', '*.defattr')
+        
+        if filename is not None:
+            run_chimerax_command(self.session, f'save {filename[0]} attrName qscore models #{self._selected_model.id_string}')
 
     def update_plot(self, *_):
         pw = self.plot_widget
@@ -539,13 +563,13 @@ class QScorePlot(QFrame):
         residue.atoms.selected = True
         residue.atoms.intra_bonds.selected = True
         atomspec = f'#!{residue.structure.id_string}/{residue.chain_id}:{residue.number}'
-        from chimerax.core.commands import run
+        #from chimerax.core.commands import run
         from .clipper_compat import model_managed_by_clipper
         m = residue.structure
 
         if model_managed_by_clipper(m):
             # Just view the model
-            run(session, f'view {atomspec}')
+            run_chimerax_command(session, f'view {atomspec}')
         else:
             # TODO: decide what to do here
             from chimerax.atomic import Residues, concise_residue_spec
@@ -560,9 +584,9 @@ class QScorePlot(QFrame):
                 neighbors.update(new_neighbors)
             residues = Residues(neighbors)
             argspec = concise_residue_spec(session, residues)
-            run(session, f'surf zone #{self.volume.id_string} near {argspec} dist 3', log=False)
-            run(session, f'~cartoon #{m.id_string}; hide #{m.id_string}; show {argspec}; cartoon {argspec}&~{atomspec}', log=False)
-            run(session, f'view {atomspec}', log=False)            
+            run_chimerax_command(session, f'surf zone #{self.volume.id_string} near {argspec} dist 3', log=False)
+            run_chimerax_command(session, f'~cartoon #{m.id_string}; hide #{m.id_string}; show {argspec}; cartoon {argspec}&~{atomspec}', log=False)
+            run_chimerax_command(session, f'view {atomspec}', log=False)            
 
     def update_data(self, residues, scores, volume):
         self.volume = volume
