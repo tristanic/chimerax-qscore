@@ -100,3 +100,13 @@ will have a score of N/A in all categories.
 
 If given, the same details as above will be written in comma-separated 
 text (CSV) format to a file of that name.
+
+**assignAttr**
+---------------
+
+If given, each selected atom will have the "qscore" attribute assigned to
+enable atom selection based on their score. For instance to select all atoms with qscore below 0.25:
+
+.. code-block::
+
+    select @@qscore<0.25

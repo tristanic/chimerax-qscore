@@ -162,6 +162,12 @@ class QScoreWidget(QFrame):
 
         bhl.addWidget(ldcb, 1, 2)
 
+        aacb = self._assign_attr_checkbox = QCheckBox('Assign atom attr.')
+        aacb.setToolTip('<span>If checked, each atom will have the attribute "qscore" assigned to enable selection of residues based on the score.</span>')
+        aacb.setChecked(False)
+        bhl.addWidget(aacb, 1, 3)
+
+
         bl1.addLayout(bhl)
         bl1.addStretch()
         layout.addLayout(bl)
@@ -207,10 +213,14 @@ class QScoreWidget(QFrame):
     def log_details(self, flag):
         self._log_details_checkbox.setChecked(flag)
     
-
-
-
-
+    @property
+    def assign_attr(self):
+        'returns checked status of the tichbox about attribute assignment'
+        return self._assign_attr_checkbox.isChecked()
+    
+    @assign_attr.setter
+    def assign_attr(self, flag):
+        self._assign_attr_checkbox.setChecked(flag)
 
     def recalc(self, *_, log_details=None, output_file=None, echo_command=True):
         if log_details is None:
@@ -224,7 +234,7 @@ class QScoreWidget(QFrame):
             outputfile_text = f'outputFile {output_file}'
         else:
             outputfile_text = ''
-        residue_map, (query_atoms, atom_scores) = run(self.session, f'qscore #{m.id_string} to #{v.id_string} useGui false pointsPerShell {self.points_per_shell} shellRadiusStep {self.shell_radius_step:.3f} maxShellRadius {self.max_shell_radius:.2f} referenceGaussianSigma {self.reference_sigma:.2f} logDetails {log_details} {outputfile_text}', log=echo_command)
+        residue_map, (query_atoms, atom_scores) = run(self.session, f'qscore #{m.id_string} to #{v.id_string} useGui false pointsPerShell {self.points_per_shell} shellRadiusStep {self.shell_radius_step:.3f} maxShellRadius {self.max_shell_radius:.2f} referenceGaussianSigma {self.reference_sigma:.2f} logDetails {log_details} {outputfile_text} assignAttr {self.assign_attr}', log=echo_command)
         self._residue_map = residue_map
         self._atom_scores = atom_scores
         self._query_atoms = query_atoms
