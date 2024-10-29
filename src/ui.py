@@ -306,10 +306,13 @@ class QScoreWidget(QFrame):
         if self._selected_model is None:
             raise UserError('No model is currently selected!')
         # ask for file path
-        filename = QFileDialog.getSaveFileName(self, 'Save attribute assignment file...', '.', '*.defattr')
-        
-        if filename is not None:
-            run_chimerax_command(self.session, f'save {filename[0]} attrName qscore models #{self._selected_model.id_string}')
+        # a tuple with two empty strings is retured by QFileDialog.getSaveFileName if the user presses Cancel
+        filename, _ = QFileDialog.getSaveFileName(self, 'Save attribute assignment file...', '.', '*.defattr')
+        if filename != "": 
+            if not filename.endswith('.defattr'):
+                # auto-add file suffix
+                filename += '.defattr'
+            run_chimerax_command(self.session, f'save "{filename}" attrName qscore models #{self._selected_model.id_string} format defattr')
 
     def update_plot(self, *_):
         pw = self.plot_widget
@@ -888,3 +891,4 @@ def slot_disconnected(signal, slot):
         pass
     finally:
         signal.connect(slot)
+        
