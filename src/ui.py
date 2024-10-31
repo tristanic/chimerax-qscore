@@ -80,6 +80,7 @@ class QScoreWidget(QFrame):
         bl.addWidget(QLabel('Chain: '))
         cb = self.chain_button = ChainChooserButton()
         self.triggers.add_handler('selected model changed', cb._selected_model_changed_cb)
+        self.triggers.add_handler('selected model changed', self._toggle_save_button_enabled)
         cb.triggers.add_handler('selected chain changed', self.update_plot)
         bl.addWidget(cb)
         bl.addStretch()
@@ -174,6 +175,9 @@ class QScoreWidget(QFrame):
         safb = QPushButton('Save attrs.')
         safb.setToolTip('<span>Save calculated Q-scores as ChimeraX attribute assignment file</span>')
         safb.clicked.connect(self.save_attr_assignment_file)
+        safb.setEnabled(False) # nothing to save when widget just loaded
+        self._safb = safb # save object link for _toggle_save_button_enabled method
+        
         bhl.addWidget(safb, 1,4)
 
         bl1.addLayout(bhl)
@@ -246,6 +250,8 @@ class QScoreWidget(QFrame):
         self._atom_scores = atom_scores
         self._query_atoms = query_atoms
         self.update_plot()
+        # update enabled of the save attr button
+        self._safb.setEnabled(self.assign_attr) # this button is only active if assign attr checkbox is ticked
         return residue_map, (query_atoms, atom_scores)
 
     def _models_removed_cb(self, trigger_name, removed):
@@ -293,6 +299,20 @@ class QScoreWidget(QFrame):
             self._atom_scores = None
             self.update_plot()
 
+    def _toggle_save_button_enabled(self, trigger_name, model):
+        'If the model changed, the export files button is made invisible, because Q-scores are not yet calculated; however if the attribute is already assigned (e.g. in a previous run) then it should be enabled'
+        # TODO update plot as well if qscore has been assigned for the model?
+        # check if the qscore atom attribute has been assigned to at least one atom (may take a while)
+        qscore_attr_assigned = False
+        for atom in model.atoms:
+            for custom_attr in atom.custom_attrs:
+                if 'qscore' in custom_attr:
+                    qscore_attr_assigned = True
+                    break
+            else: # exiting a nested loop trick: https://stackoverflow.com/questions/653509/breaking-out-of-nested-loops
+                continue
+            break
+        self._safb.setEnabled(qscore_attr_assigned)
 
     def save_attr_assignment_file(self):
         '''
@@ -301,10 +321,13 @@ class QScoreWidget(QFrame):
         For file specification see:
         
         https://www.cgl.ucsf.edu/chimerax/docs/user/formats/defattr.html#examples
+        
+        TODO: allow saving a CSV with this menu, too
         '''
         # check if there is an active model in the UI
-        if self._selected_model is None:
+        if self.selected_model is None:
             raise UserError('No model is currently selected!')
+        
         # ask for file path
         # a tuple with two empty strings is retured by QFileDialog.getSaveFileName if the user presses Cancel
         filename, _ = QFileDialog.getSaveFileName(self, 'Save attribute assignment file...', '.', '*.defattr')
