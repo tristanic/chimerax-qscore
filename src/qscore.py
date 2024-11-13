@@ -21,8 +21,8 @@ RANDOM_SEED=1985
 def q_score(residues, volume, 
             ref_sigma=0.6, points_per_shell = 8, max_rad = 2.0, step=0.1, num_test_points=128, 
             clustering_iterations=5, include_h = False, debug = False, draw_points=False, 
-            logger=None, log_interval=1000, log_details = False, output_file = None,
-            randomize_shell_points=True, random_seed=RANDOM_SEED):
+            logger=None, log_interval=1000, log_details = False, output_file = None,assign_attr=False,
+            randomize_shell_points=True, random_seed=RANDOM_SEED,):
     '''
     Implementation of the map-model Q-score as described in Pintille et al. (2020): https://www.nature.com/articles/s41592-020-0731-1.
 
@@ -70,6 +70,8 @@ def q_score(residues, volume,
     small selections at a time (`debug` is *very*  verbose, and `draw_points` leads to the drawing of approx.
     `max_rad`/`step`*`points_per_shell` ~ 160 points per atom).
 
+    If `assign_attr` is True, then each selected atom will have the qscore attribute assigned.
+
     Returns:
 
     - a {Residue: (mean_q_score, worst_atom_score)} dict
@@ -105,7 +107,10 @@ def q_score(residues, volume,
         query_atoms = query_atoms[query_atoms.element_names != 'H']
         all_atoms = all_atoms[all_atoms.element_names != 'H']
 
-
+    # register the qscore attribute in case this is needed
+    if assign_attr:
+        from chimerax.atomic import Atom
+        Atom.register_attr(session, 'qscore', 'qscore', attr_type=float, can_return_none=True)
 
     if draw_points:
         from chimerax.core.models import Model, Drawing
@@ -219,7 +224,10 @@ def q_score(residues, volume,
                 print(f'Measured: {measured}')
                 print(f'Ref: {ref}')
                 print(f'q: {q:.3f}')
-        q_scores.append(q)      
+        q_scores.append(q)
+        # assign the attribute if requested
+        if assign_attr:
+            a.qscore = q
 
     if draw_points:
         positions = numpy.concatenate(positions)

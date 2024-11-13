@@ -5,13 +5,12 @@ from chimerax.core.commands import (
 )
 from chimerax.map import MapArg
 from chimerax.atomic import ResiduesArg
-
+from chimerax.core.errors import UserError
 
 def qscore(session, residues, to_volume=None, use_gui=True, reference_gaussian_sigma=0.6, points_per_shell=8, 
             max_shell_radius=2.0, shell_radius_step=0.1, include_hydrogens=False, randomize_shell_points=True,
-            log_details=False, output_file=None):
+            log_details=False, output_file=None, assign_attr=False):
     if to_volume is None:
-        from chimerax.core.errors import UserError
         raise UserError("Must specify a map to compare the model to!")
     if use_gui:
         if not session.ui.is_gui:
@@ -46,7 +45,7 @@ def qscore(session, residues, to_volume=None, use_gui=True, reference_gaussian_s
                                         randomize_shell_points=randomize_shell_points, 
                                         logger=session.logger,
                                         log_details=log_details,
-                                        output_file=output_file
+                                        output_file=output_file, assign_attr=assign_attr
                                         )
     if not use_gui:
         # The GUI itself runs this command with use_gui=False, so if we don't do this the result gets printed twice
@@ -68,6 +67,7 @@ qscore_desc = CmdDesc(
         ("max_shell_radius", Bounded(FloatArg, min=0.5, max=2.5)),
         ("shell_radius_step", Bounded(FloatArg, min=0.025, max=0.5)),
         ("log_details", BoolArg),
-        ("output_file", FileNameArg)
+        ("output_file", FileNameArg),
+        ("assign_attr", BoolArg),
     ]
     )
