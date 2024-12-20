@@ -100,3 +100,25 @@ will have a score of N/A in all categories.
 
 If given, the same details as above will be written in comma-separated 
 text (CSV) format to a file of that name.
+
+**assignAttr**
+---------------
+
+If given, each selected atom will have the "qscore" attribute assigned to
+enable atom selection based on their score. For instance to select all atoms with Q-score below 0.25:
+
+.. code-block::
+
+    select @@qscore<0.25
+	
+You can also use the "Render/Select by Attribute" tool to visualize Q-scores or run the following command:
+
+.. code-block::
+    
+	color byattribute qscore palette red:gray:blue range 0,1
+	
+Finally, the attribute assignment file can be saved with this command:
+
+.. code-block::
+    
+    save my_file.defattr attrName qscore
