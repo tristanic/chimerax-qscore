@@ -221,7 +221,7 @@ class QScoreWidget(QFrame):
             raise UserError('Must select a model and map first!')
         from chimerax.core.commands import run
         if output_file is not None:
-            outputfile_text = f'outputFile {output_file}'
+            outputfile_text = f'outputFile "{output_file}"'
         else:
             outputfile_text = ''
         residue_map, (query_atoms, atom_scores) = run(self.session, f'qscore #{m.id_string} to #{v.id_string} useGui false pointsPerShell {self.points_per_shell} shellRadiusStep {self.shell_radius_step:.3f} maxShellRadius {self.max_shell_radius:.2f} referenceGaussianSigma {self.reference_sigma:.2f} logDetails {log_details} {outputfile_text}', log=echo_command)
