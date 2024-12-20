@@ -1,7 +1,7 @@
 # vim: set expandtab shiftwidth=4 softtabstop=4:
 
 
-__version__ = 1.1
+__version__ = 1.2
 
 from chimerax.core.toolshed import BundleAPI
 
