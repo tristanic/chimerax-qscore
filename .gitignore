@@ -71,3 +71,8 @@ coverage.xml
 
 # Sphinx documentation
 docs/_build/
+
+# Per-lane ChimeraX test isolation (see run_chimerax.bat / .sh):
+# the isolated user tree and any lane marker are local, never committed.
+.chimerax-home/
+.chimerax-lane

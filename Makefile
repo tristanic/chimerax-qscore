@@ -60,6 +60,16 @@ else
 CHIMERAX_EXE = $(shell which chimerax)
 endif
 endif
+
+# --- Per-lane test isolation -------------------------------------------------
+# Route every ChimeraX launch through run_chimerax.sh so each worktree/lane
+# installs into (and tests from) its own isolated ChimeraX user directory --
+# see run_chimerax.sh and tools/_isolated_chimerax.py. The CHIMERAX_APP block
+# above is retained for its side effects (e.g. MACOSX_DEPLOYMENT_TARGET); this
+# last assignment of CHIMERAX_EXE wins. On Windows use make_win.bat instead.
+REL_TOK = $(if $(RELEASE),release,)
+CHIMERAX_EXE = $(dir $(lastword $(MAKEFILE_LIST)))run_chimerax.sh $(REL_TOK)
+
 RUN = $(CHIMERAX_EXE) --nogui --exit --cmd
 
 PYSRCS = $(wildcard src/*.py)
