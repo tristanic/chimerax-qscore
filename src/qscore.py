@@ -136,8 +136,8 @@ def q_score(residues, volume,
         from chimerax.atomic import concise_residue_spec
         session.logger.warning(f'WARNING: the following residues in #{m.id_string} have atoms outside the bounds of volume #{volume.id_string} '
                             f'and will be excluded from the Q-score calculation:\n{concise_residue_spec(session, oob_residues)}')
-        mask = numpy.logical_not(numpy.in1d(query_atoms.residues, oob_residues))
-        residues = residues[numpy.logical_not(numpy.in1d(residues, oob_residues))]
+        mask = numpy.logical_not(numpy.isin(query_atoms.residues, oob_residues))
+        residues = residues[numpy.logical_not(numpy.isin(residues, oob_residues))]
         query_atoms = query_atoms[mask]
         query_coords = query_atoms.scene_coords
         r0_vals = r0_vals[mask]
