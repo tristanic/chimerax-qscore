@@ -280,10 +280,10 @@ def report_results(residue_map, query_atoms, atom_scores, out_of_bounds, log=Fal
         if scores is None:
             if log:
                 sep = log_sep
-                logger.info(f'<pre>{r.chain_id}{sep}{r.number}{r.insertion_code}{sep}{r.name}{sep}"N/A"{sep}"N\A"{sep}"N/A"{sep}"N/A"</pre>', is_html=True, add_newline=False)
+                logger.info(f'<pre>{r.chain_id}{sep}{r.number}{r.insertion_code}{sep}{r.name}{sep}"N/A"{sep}"N/A"{sep}"N/A"{sep}"N/A"</pre>', is_html=True, add_newline=False)
             if filename is not None:
                 sep = file_sep
-                print(f'{r.chain_id}{sep}{r.number}{r.insertion_code}{sep}{r.name}{sep}"N/A"{sep}"N\A"{sep}"N/A"{sep}"N/A"', file=out)
+                print(f'{r.chain_id}{sep}{r.number}{r.insertion_code}{sep}{r.name}{sep}"N/A"{sep}"N/A"{sep}"N/A"{sep}"N/A"', file=out)
         qavg, qworst = scores
         backbone_atoms = r.atoms[r.atoms.is_backbones()]
         if len(backbone_atoms):
